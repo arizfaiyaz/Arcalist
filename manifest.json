@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Arcalist",
+  "version": "0.1.0",
+  "description": "A visual bookmark manager for your new tab",
+
+  "chrome_url_overrides": {
+    "newtab": "src/newtab/index.html"
+  },
+
+  "background": {
+    "service_worker": "src/background/service-worker.ts",
+    "type": "module"
+  },
+
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "tabs",
+    "activeTab"
+  ],
+
+  "icons": {
+    "128": "public/icon-128.png"
+  },
+
+  "commands": {
+    "quick-save": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Quick save the current tab to Arcalist"
+    }
+  }
+}
