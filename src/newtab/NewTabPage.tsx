@@ -1,6 +1,11 @@
+import { useState, useEffect } from 'react'
 import { PageNav } from '../components/PageNav'
 import { BoardGrid } from '../components/BoardGrid'
 import { useArcalistStore } from '../store/useArcalistStore'
+import { ActionBar } from '../components/ActionBar'
+import { SearchOverlay } from '../components/Search/SearchOverlay'
+import { ImportDialog } from '../components/Import/ImportDialog'
+
 
 export function NewTabPage() {
   const pages = useArcalistStore((state) => state.pages)
@@ -8,9 +13,23 @@ export function NewTabPage() {
   const setActivePage = useArcalistStore((state) => state.setActivePage)
   const addPage = useArcalistStore((state) => state.addPage)
 
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+
   const activePage = pages.find((p) => p.id === activePageId) ?? pages[0]
 
-  // Don't render until store is initialized
+  // Global keyboard shortcut for search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchOpen(true)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
   if (!activePage) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -27,7 +46,23 @@ export function NewTabPage() {
         onPageChange={setActivePage}
         onAddPage={addPage}
       />
+
       <BoardGrid page={activePage} />
+
+      <ActionBar
+        onSearchOpen={() => setSearchOpen(true)}
+        onImportOpen={() => setImportOpen(true)}
+      />
+
+      <SearchOverlay
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+      />
+
+      <ImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+      />
     </div>
   )
 }
