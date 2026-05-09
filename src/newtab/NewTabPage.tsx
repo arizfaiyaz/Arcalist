@@ -1,21 +1,31 @@
-import { useState } from 'react'
 import { PageNav } from '../components/PageNav'
 import { BoardGrid } from '../components/BoardGrid'
-import { mockPages } from '../data/mock'
+import { useArcalistStore } from '../store/useArcalistStore'
 
 export function NewTabPage() {
-  // Track which page tab is active
-  const [activePageId, setActivePageId] = useState(mockPages[0].id)
+  const pages = useArcalistStore((state) => state.pages)
+  const activePageId = useArcalistStore((state) => state.activePageId)
+  const setActivePage = useArcalistStore((state) => state.setActivePage)
+  const addPage = useArcalistStore((state) => state.addPage)
 
-  // Find the full page object for the active tab
-  const activePage = mockPages.find((p) => p.id === activePageId) ?? mockPages[0]
+  const activePage = pages.find((p) => p.id === activePageId) ?? pages[0]
+
+  // Don't render until store is initialized
+  if (!activePage) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <PageNav
-        pages={mockPages}
+        pages={pages}
         activePageId={activePageId}
-        onPageChange={setActivePageId}
+        onPageChange={setActivePage}
+        onAddPage={addPage}
       />
       <BoardGrid page={activePage} />
     </div>

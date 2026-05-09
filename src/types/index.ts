@@ -9,7 +9,7 @@ export type Bookmark = {
 
 export type Board = {
   id: string
-  name: string
+  title: string
   bookmarks: Bookmark[]
   order: number
 }

@@ -1,14 +1,29 @@
+import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from '../lib/utils'
-import type { Page } from '../data/mock'
+import type { Page } from '../types'
 
 type Props = {
   pages: Page[]
   activePageId: string
   onPageChange: (id: string) => void
+  onAddPage: (title: string) =>  void
 }
 
-export function PageNav({ pages, activePageId, onPageChange }: Props) {
+export function PageNav({ pages, activePageId, onPageChange, onAddPage }: Props) {
+  const [adding, setAdding] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+
+  const handleAdd = () => {
+     const trimmed = newTitle.trim()
+     if (trimmed) {
+       onAddPage(trimmed)
+     }
+     setNewTitle('')
+     setAdding(false)
+   }
+    
+  
   return (
     <nav
       className={cn(
@@ -40,18 +55,40 @@ export function PageNav({ pages, activePageId, onPageChange }: Props) {
       })}
 
       {/* Add New Page Button */}
-      <button
-        className={cn(
-          'w-7 h-7 rounded-full flex items-center justify-center',
-          'text-slate-500 hover:text-white',
-          'hover:bg-surface-2 transition-all duration-150',
-          'border border-white/10 hover:border-white/20',
-          'ml-1'
-        )}
-        title="Add new page"
-      >
-        <Plus size={14} />
-      </button>
+
+      {adding ? (
+        <input
+          autoFocus
+          value={newTitle}
+          onChange={(e) => setNewTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key == 'Enter') handleAdd()
+            if (e.key == 'Escape') setAdding(false)
+          }}
+          onBlur={handleAdd}
+          placeholder='Page name..'
+          className={
+            cn(
+              'px-3 py-1 rounded-full text-sm',
+              'bg-surface-2 text-white border border-accent/50',
+              'outline-none w-28',
+              'placeholder:text-slate-500'
+            )}
+        />
+      ) : (
+        <button
+          className={cn(
+            'w-7 h-7 rounded-full flex items-center justify-center',
+            'text-slate-500 hover:text-white',
+            'hover:bg-surface-2 transition-all duration-150',
+            'border border-white/10 hover:border-white/20',
+            'ml-1'
+          )}
+          title="Add new page"
+        >
+          <Plus size={14} />
+        </button>
+      )}
     </nav>
   )
 }
