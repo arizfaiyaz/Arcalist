@@ -4,7 +4,7 @@ import { saveState, loadState } from '../lib/storage'
 import { defaultState } from '../data/default'
 import type { ArcalistState, Page, Board, Bookmark } from '../types'
 
-// The full store tpye = state shape & all actions
+// The full store type = state shape & all actions
 type ArcalistStore = ArcalistState & {
   // Initialization
   initialize: () => Promise<void>
@@ -15,17 +15,26 @@ type ArcalistStore = ArcalistState & {
   deletePage: (pageId: string) => void
   renamePage: (pageId: string, title: string) => void
 
-  // ------ *_Board actions_* ------
+  // ------ Board actions ------
   addBoard: (pageId: string, title: string) => void
   deleteBoard: (pageId: string, boardId: string) => void
   renameBoard: (pageId: string, boardId: string, title: string) => void
 
-  // Bookmark actions
+  // ------ Bookmark actions ------
   addBookmark: (boardId: string, bookmark: Omit<Bookmark, 'id' | 'createdAt'>) => void
   deleteBookmark: (boardId: string, bookmarkId: string) => void
   moveBookmark: (fromBoardId: string, toBoardId: string, bookmarkId: string) => void
 
-  // Internal helper — saves to storage after every changes
+  // ------ Reorder actions (Drag and Drop) ------
+  reorderBoards: (pageId: string, oldIndex: number, newIndex: number) => void
+  reorderBookmarks: (
+    sourceBoardId: string,
+    destinationBoardId: string,
+    sourceIndex: number,
+    destinationIndex: number
+  ) => void
+
+  // Internal helper
   _persist: () => void
 }
 
@@ -35,8 +44,6 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   activePageId: '',
 
   // --------- Initialization ---------------
-  // Call this once when the app mounts.
-  // Loads from storage or falsl back to defaultState.
   initialize: async () => {
     const saved = await loadState()
     if (saved) {
@@ -48,14 +55,12 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   },
 
   // --------- Internal persist helper ----------
-  // Every action calls this at the end to save the new state.
   _persist: () => {
     const { pages, activePageId } = get()
     saveState({ pages, activePageId })
   },
 
   // --------- Page Actions ------------
-
   setActivePage: (pageId) => {
     set({ activePageId: pageId })
     get()._persist()
@@ -73,12 +78,10 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   },
 
   deletePage: (pageId) => {
-    // Don't allow deleting the last page
     if (get().pages.length <= 1) return
 
     set((state) => {
       const filtered = state.pages.filter((p) => p.id !== pageId)
-      // If we deleted the active page, switch to the first remaining one
       const newActiveId =
         state.activePageId === pageId ? filtered[0].id : state.activePageId
       return { pages: filtered, activePageId: newActiveId }
@@ -96,7 +99,6 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   },
 
   // --------- Board Actions ----------
-
   addBoard: (pageId, title) => {
     const page = get().pages.find((p) => p.id === pageId)
     const newBoard: Board = {
@@ -143,7 +145,6 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   },
 
   // --------- Bookmark Actions ----------
-
   addBookmark: (boardId, bookmark) => {
     const newBookmark: Bookmark = {
       id: generateId(),
@@ -178,10 +179,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
   },
 
   moveBookmark: (fromBoardId, toBoardId, bookmarkId) => {
-    // Find the bookmark first
     let bookmark: Bookmark | undefined
 
-    const pages = get().pages.map((p) => ({
+    const pagesWithRemoved = get().pages.map((p) => ({
       ...p,
       boards: p.boards.map((b) => {
         if (b.id === fromBoardId) {
@@ -197,9 +197,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
 
     if (!bookmark) return
 
-    // Now add it to the target board
     const finalBookmark = bookmark
-    const finalPages = pages.map((p) => ({
+    const finalPages = pagesWithRemoved.map((p) => ({
       ...p,
       boards: p.boards.map((b) =>
         b.id === toBoardId
@@ -209,6 +208,57 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => ({
     }))
 
     set({ pages: finalPages })
+    get()._persist()
+  },
+
+  // --------- Reorder Actions ----------
+  reorderBoards: (pageId, oldIndex, newIndex) => {
+    set((state) => ({
+      pages: state.pages.map((p) => {
+        if (p.id !== pageId) return p
+
+        const boards = [...p.boards]
+        const [moved] = boards.splice(oldIndex, 1)
+        boards.splice(newIndex, 0, moved)
+
+        return { ...p, boards }
+      }),
+    }))
+    get()._persist()
+  },
+
+  reorderBookmarks: (sourceBoardId, destinationBoardId, sourceIndex, destinationIndex) => {
+    set((state) => {
+      let bookmark: Bookmark | undefined
+
+      // Step 1: Remove from source board
+      const afterRemove = state.pages.map((p) => ({
+        ...p,
+        boards: p.boards.map((b) => {
+          if (b.id !== sourceBoardId) return b
+          const bookmarks = [...b.bookmarks]
+          const [removed] = bookmarks.splice(sourceIndex, 1)
+          bookmark = removed
+          return { ...b, bookmarks }
+        }),
+      }))
+
+      if (!bookmark) return state
+      const finalBookmark = bookmark
+
+      // Step 2: Insert into destination board
+      const afterInsert = afterRemove.map((p) => ({
+        ...p,
+        boards: p.boards.map((b) => {
+          if (b.id !== destinationBoardId) return b
+          const bookmarks = [...b.bookmarks]
+          bookmarks.splice(destinationIndex, 0, finalBookmark)
+          return { ...b, bookmarks }
+        }),
+      }))
+
+      return { pages: afterInsert }
+    })
     get()._persist()
   },
 }))
