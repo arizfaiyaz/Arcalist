@@ -4,8 +4,12 @@ import { saveState, loadState } from "../lib/storage";
 import { pushToCloud, pullFromCloud, resolveConflict } from "../lib/sync";
 import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
+import { DEFAULT_WALLPAPER } from "../data/wallpapers";
+import { applyTheme } from "../lib/theme";
 import type {
   ArcalistState,
+  AppSettings,
+  WallpaperTheme,
   Page,
   Board,
   Bookmark,
@@ -64,6 +68,10 @@ type ArcalistStore = ArcalistState & {
     destinationIndex: number,
   ) => void;
 
+  // Settings & appearance
+  updateSettings: (settings: Partial<AppSettings>) => void;
+  setWallpaper: (wallpaper: WallpaperTheme) => void;
+
   // Privacy
   togglePrivacyMode: () => void;
 
@@ -92,6 +100,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     trash: [],
     privacyMode: false,
     updatedAt: 0,
+    settings: defaultState.settings,
+    wallpaperTheme: DEFAULT_WALLPAPER,
     user: null,
     syncStatus: "idle",
     signingIn: false,
@@ -108,10 +118,12 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           trash: local.trash ?? [],
           updatedAt: local.updatedAt ?? 0,
         });
+        if (local.wallpaperTheme) applyTheme(local.wallpaperTheme);
       } else {
         const initial = { ...defaultState, updatedAt: Date.now() };
         set(initial);
         saveState(initial);
+        applyTheme(initial.wallpaperTheme);
       }
 
       // 2. Check for existing Supabase session
@@ -140,17 +152,18 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           // Pull remote state on sign in
           const remote = await pullFromCloud(session.user.id);
           if (remote) {
-            const currentLocal = await loadState();
-            const winner = currentLocal
-              ? resolveConflict(currentLocal, remote)
-              : remote;
-            set(winner);
-            saveState(winner);
+            // Remote exists — always use it on sign in
+            // User's cloud data is the source of truth
+            set({ ...remote, user: session.user, privacyMode: false });
+            saveState({ ...remote, privacyMode: false });
           } else {
-            // First time signing in — push local state to cloud
-            const currentState = await loadState();
-            if (currentState && session.user) {
-              await pushToCloud(session.user.id, currentState);
+            // No remote data yet — first time signing in
+            // Push current local state up to cloud
+            const currentLocal = await loadState();
+            if (currentLocal) {
+              await pushToCloud(session.user.id, currentLocal);
+              set({ syncStatus: "synced" });
+              setTimeout(() => set({ syncStatus: "idle" }), 2000);
             }
           }
         } else if (event === "SIGNED_OUT") {
@@ -261,12 +274,21 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Internal Helpers ─────────────────────────────────────
     _persist: () => {
-      const { pages, activePageId, trash, privacyMode } = get();
+      const {
+        pages,
+        activePageId,
+        trash,
+        privacyMode,
+        settings,
+        wallpaperTheme,
+      } = get();
       const state: ArcalistState = {
         pages,
         activePageId,
         trash,
         privacyMode,
+        settings,
+        wallpaperTheme,
         updatedAt: Date.now(),
       };
       set({ updatedAt: state.updatedAt });
@@ -275,8 +297,16 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     _syncToCloud: async () => {
-      const { user, pages, activePageId, trash, privacyMode, updatedAt } =
-        get();
+      const {
+        user,
+        pages,
+        activePageId,
+        trash,
+        privacyMode,
+        settings,
+        wallpaperTheme,
+        updatedAt,
+      } = get();
       if (!user) return;
 
       set({ syncStatus: "syncing" });
@@ -286,6 +316,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           activePageId,
           trash,
           privacyMode,
+          settings,
+          wallpaperTheme,
           updatedAt,
         });
         set({ syncStatus: "synced" });
@@ -294,6 +326,21 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       } catch {
         set({ syncStatus: "error" });
       }
+    },
+
+    // ─── Settings & Appearance ──────────────────────────────
+    updateSettings: (newSettings) => {
+      set((state) => ({
+        settings: { ...state.settings, ...newSettings },
+      }));
+      get()._persist();
+    },
+
+    setWallpaper: (wallpaper) => {
+      set({ wallpaperTheme: wallpaper });
+      // Apply CSS variables immediately so theme updates live
+      applyTheme(wallpaper);
+      get()._persist();
     },
 
     // ─── Privacy ──────────────────────────────────────────────

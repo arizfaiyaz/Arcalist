@@ -1,34 +1,51 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 @theme {
-  /* Brand colors — use these as: bg-background, text-accent, etc. */
-  --color-background: #1a1d24;
-  --color-surface: #22262f;
-  --color-surface-2: #2a2f3a;
-  --color-accent: #00d285;
-  --color-accent-hover: #00b871;
+    /* Brand colors — use these as: bg-background, text-accent, etc. */
+    --color-background: #1a1d24;
+    --color-surface: #22262f;
+    --color-surface-2: #2a2f3a;
+    --color-accent: #00d285;
+    --color-accent-hover: #00b871;
 
-  /* Typography */
-  --font-sans: 'Inter', sans-serif;
+    /* Typography */
+    --font-sans: "Inter", sans-serif;
 }
 
 @layer base {
-  * {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
 
-  body {
-    background-color: var(--color-background);
-    color: #e2e8f0;
-    font-family: var(--font-sans);
-    min-height: 100vh;
-  }
+    body {
+        background-color: var(--color-background);
+        color: #e2e8f0;
+        font-family: var(--font-sans);
+        min-height: 100vh;
+    }
 
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: #1a1d24; }
-  ::-webkit-scrollbar-thumb { background: #2a2f3a; border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #00d285; }
+    ::-webkit-scrollbar {
+        width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #1a1d24;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #2a2f3a;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #00d285;
+    }
+}
+
+/* ── Frosted-glass surfaces when a wallpaper is active ───────────────────── */
+.has-wallpaper .bg-surface,
+.has-wallpaper .bg-surface\/50,
+.has-wallpaper .bg-surface\/80 {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
 }

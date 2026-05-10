@@ -29,10 +29,27 @@ export type TrashedBookmark = {
   fromBoardId: string // used for restoring the bookmark to the correct board
 }
 
+export type AppSettings = {
+  openInNewTab: boolean
+  shortenTitles: boolean
+  compactMode: boolean
+  showDescriptions: boolean
+}
+
+export type WallpaperTheme = {
+  id: string
+  name: string
+  url: string | null
+  isDark: boolean
+  accentColor: string
+}
+
 export type ArcalistState = {
   pages: Page[]
   activePageId: string
   trash: TrashedBookmark[]; 
   privacyMode: boolean
   updatedAt: number
+  settings: AppSettings
+  wallpaperTheme: WallpaperTheme
 }

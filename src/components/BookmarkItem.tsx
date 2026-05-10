@@ -9,19 +9,33 @@ import type { Bookmark } from "../types";
 type Props = {
   bookmark: Bookmark;
   boardId: string;
+  multiSelectMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
 };
 
-export function BookmarkItem({ bookmark, boardId }: Props) {
+export function BookmarkItem({
+  bookmark,
+  boardId,
+  multiSelectMode = false,
+  isSelected = false,
+  onSelect,
+}: Props) {
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
   const privacyMode = useArcalistStore((state) => state.privacyMode);
+  const titleTextClass = useArcalistStore((state) =>
+    state.wallpaperTheme.isDark
+      ? "text-slate-300 group-hover:text-white"
+      : "text-slate-700 group-hover:text-slate-900",
+  );
   const [imgError, setImgError] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = useState(false)
-  
+  const [isHovered, setIsHovered] = useState(false);
+
   const {
     attributes,
     listeners,
@@ -81,19 +95,47 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        className="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-2 transition-colors duration-150"
+        className={cn(
+          "group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
+          "hover:bg-surface-2 transition-colors duration-150",
+          isSelected && "bg-accent/10 border border-accent/20",
+        )}
       >
-        {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
-            "text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing touch-none",
-          )}
-        >
-          <GripVertical size={12} />
-        </button>
+        {/* Checkbox in multi-select mode, grip handle otherwise */}
+        {multiSelectMode ? (
+          <button
+            onClick={() => onSelect?.(bookmark.id)}
+            className={cn(
+              "w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all",
+              isSelected
+                ? "bg-accent border-accent"
+                : "border-slate-500 hover:border-accent",
+            )}
+          >
+            {isSelected && (
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+                <path
+                  d="M1 4L3 6L7 2"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  className="text-background"
+                />
+              </svg>
+            )}
+          </button>
+        ) : (
+          <button
+            {...attributes}
+            {...listeners}
+            className={cn(
+              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
+              "text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing touch-none",
+            )}
+          >
+            <GripVertical size={12} />
+          </button>
+        )}
 
         {/* Clickable link */}
         <button
@@ -126,8 +168,9 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
           {/* Title — blurred in privacy mode */}
           <span
             className={cn(
-              "truncate text-sm text-slate-300 group-hover:text-white leading-none",
+              "truncate text-sm leading-none",
               "transition-all duration-200 select-none",
+              titleTextClass,
               privacyMode && !isHovered && "blur-sm",
             )}
           >
