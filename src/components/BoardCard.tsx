@@ -20,7 +20,8 @@ export function BoardCard({ board, pageId }: Props) {
   const deleteBoard = useArcalistStore((state) => state.deleteBoard)
   const [adding, setAdding] = useState(false)
   const [newUrl, setNewUrl] = useState('')
-
+  
+  const privacyMode = useArcalistStore((state) => state.privacyMode)
   // Make the board itself sortable (for reordering boards)
   const {
     attributes,
@@ -98,7 +99,11 @@ export function BoardCard({ board, pageId }: Props) {
           >
             <GripVertical size={12} />
           </button>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+          <h3 className={cn(
+            'text-xs font-semibold text-slate-400 uppercase tracking-wider',
+            'transition-all duration-200 select-none',
+            privacyMode && 'blur-sm'
+          )}>
             {board.title}
           </h3>
         </div>

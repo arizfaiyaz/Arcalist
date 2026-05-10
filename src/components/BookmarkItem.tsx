@@ -20,7 +20,8 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
     y: number;
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-
+  const [isHovered, setIsHovered] = useState(false)
+  
   const {
     attributes,
     listeners,
@@ -78,6 +79,8 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
         ref={setNodeRef}
         style={style}
         onContextMenu={handleContextMenu}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className="group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-2 transition-colors duration-150"
       >
         {/* Drag handle */}
@@ -101,7 +104,7 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
           <div
             className={cn(
               "shrink-0 transition-all duration-200",
-              privacyMode && "blur-sm",
+              privacyMode && !isHovered && "blur-sm",
             )}
           >
             {!imgError ? (
@@ -125,7 +128,7 @@ export function BookmarkItem({ bookmark, boardId }: Props) {
             className={cn(
               "truncate text-sm text-slate-300 group-hover:text-white leading-none",
               "transition-all duration-200 select-none",
-              privacyMode && "blur-sm",
+              privacyMode && !isHovered && "blur-sm",
             )}
           >
             {bookmark.title}
