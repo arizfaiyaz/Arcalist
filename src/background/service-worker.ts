@@ -1,4 +1,4 @@
-// LumiList Service Worker
+// Arcalist Service Worker
 // This runs in the background, separate from the new tab page.
 // It has no access to the DOM — only Chrome APIs.
 

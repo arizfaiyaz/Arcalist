@@ -17,7 +17,8 @@
     "bookmarks",
     "storage",
     "tabs",
-    "activeTab"
+    "activeTab",
+    "windows"
   ],
 
   "icons": {

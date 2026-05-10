@@ -21,7 +21,16 @@ export type Page = {
   order: number
 }
 
+export type TrashedBookmark = {
+  bookmark: Bookmark
+  deletedAt: number  //timestamp
+  fromBoardTitle: string
+  fromPageTitle: string
+  fromBoardId: string // used for restoring the bookmark to the correct board
+}
+
 export type ArcalistState = {
   pages: Page[]
   activePageId: string
+  trash: TrashedBookmark[]; // <--- Add this line
 }
