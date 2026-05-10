@@ -32,5 +32,7 @@ export type TrashedBookmark = {
 export type ArcalistState = {
   pages: Page[]
   activePageId: string
-  trash: TrashedBookmark[]; // <--- Add this line
+  trash: TrashedBookmark[]; 
+  privacyMode: boolean
+  updatedAt: number
 }

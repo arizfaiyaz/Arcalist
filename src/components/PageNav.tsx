@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { cn } from '../lib/utils'
 import type { Page } from '../types'
+import { AuthStatus } from './AuthStatus'
 
 type Props = {
   pages: Page[]
@@ -89,6 +90,12 @@ export function PageNav({ pages, activePageId, onPageChange, onAddPage }: Props)
           <Plus size={14} />
         </button>
       )}
+
+      {/* Push auth status to the right */}
+           <div className="ml-auto">
+             <AuthStatus />
+      </div>
+      
     </nav>
   )
 }

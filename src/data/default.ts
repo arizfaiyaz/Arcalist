@@ -6,6 +6,8 @@ const favicon = (domain: string) =>
 export const defaultState: ArcalistState = {
   activePageId: 'page-1',
   trash: [],
+  privacyMode: false,          // persisted now
+  updatedAt: Date.now(),
   pages: [
     {
       id: 'page-1',
