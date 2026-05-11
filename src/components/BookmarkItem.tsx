@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, ExternalLink } from "lucide-react";
+import { GripVertical, Trash2, ExternalLink, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../lib/utils";
 import { useArcalistStore } from "../store/useArcalistStore";
+import { BookmarkEditModal } from "./BookmarkEditModal";
 import type { Bookmark } from "../types";
 
 type Props = {
@@ -23,6 +24,9 @@ export function BookmarkItem({
 }: Props) {
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
   const privacyMode = useArcalistStore((state) => state.privacyMode);
+  const { openInNewTab, shortenTitles, showDescriptions } = useArcalistStore(
+    (state) => state.settings,
+  );
   const titleTextClass = useArcalistStore((state) =>
     state.wallpaperTheme.isDark
       ? "text-slate-300 group-hover:text-white"
@@ -35,6 +39,7 @@ export function BookmarkItem({
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const {
     attributes,
@@ -138,47 +143,69 @@ export function BookmarkItem({
         )}
 
         {/* Clickable link */}
-        <button
-          onClick={() => window.open(bookmark.url, "_self")}
-          className="flex items-center gap-2 flex-1 min-w-0 text-left"
-        >
-          {/* Favicon — blurred in privacy mode */}
-          <div
-            className={cn(
-              "shrink-0 transition-all duration-200",
-              privacyMode && !isHovered && "blur-sm",
-            )}
+        <div className="flex-1 min-w-0">
+          <button
+            onClick={() =>
+              window.open(bookmark.url, openInNewTab ? "_blank" : "_self")
+            }
+            className="flex items-center gap-2 w-full text-left"
           >
-            {!imgError ? (
-              <img
-                src={bookmark.favicon}
-                alt=""
-                className="w-4 h-4 rounded-sm"
-                onError={() => setImgError(true)}
-              />
-            ) : (
-              <div className="w-4 h-4 rounded-sm bg-surface-2 flex items-center justify-center">
-                <span className="text-[8px] text-slate-400 font-bold uppercase">
-                  {bookmark.title.charAt(0)}
-                </span>
-              </div>
-            )}
-          </div>
+            {/* Favicon — blurred in privacy mode */}
+            <div
+              className={cn(
+                "shrink-0 transition-all duration-200",
+                privacyMode && !isHovered && "blur-sm",
+              )}
+            >
+              {!imgError ? (
+                <img
+                  src={bookmark.favicon}
+                  alt=""
+                  className="w-4 h-4 rounded-sm"
+                  onError={() => setImgError(true)}
+                />
+              ) : (
+                <div className="w-4 h-4 rounded-sm bg-surface-2 flex items-center justify-center">
+                  <span className="text-[8px] text-slate-400 font-bold uppercase">
+                    {bookmark.title.charAt(0)}
+                  </span>
+                </div>
+              )}
+            </div>
 
-          {/* Title — blurred in privacy mode */}
-          <span
-            className={cn(
-              "truncate text-sm leading-none",
-              "transition-all duration-200 select-none",
-              titleTextClass,
-              privacyMode && !isHovered && "blur-sm",
-            )}
-          >
-            {bookmark.title}
-          </span>
-        </button>
+            {/* Title — blurred in privacy mode */}
+            <span
+              className={cn(
+                "text-sm leading-none",
+                shortenTitles ? "truncate" : "whitespace-normal break-words",
+                "transition-all duration-200 select-none",
+                titleTextClass,
+                privacyMode && !isHovered && "blur-sm",
+              )}
+            >
+              {bookmark.title}
+            </span>
+          </button>
+
+          {showDescriptions && bookmark.description && (
+            <p className="text-[11px] text-slate-500 pl-6 pr-2 mt-0.5">
+              {bookmark.description}
+            </p>
+          )}
+        </div>
 
         {/* Trash button */}
+        <button
+          onClick={() => setEditOpen(true)}
+          className={cn(
+            "opacity-0 group-hover:opacity-100 transition-opacity",
+            "w-4 h-4 flex items-center justify-center shrink-0",
+            "text-slate-600 hover:text-accent",
+          )}
+          title="Edit bookmark"
+        >
+          <Pencil size={10} />
+        </button>
         <button
           onClick={handleTrash}
           className={cn(
@@ -226,6 +253,13 @@ export function BookmarkItem({
           />
         </div>
       )}
+
+      <BookmarkEditModal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        bookmark={bookmark}
+        boardId={boardId}
+      />
     </>
   );
 }

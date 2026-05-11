@@ -1,150 +1,312 @@
-// Runs once on extension install to pull all existing Chrome bookmarks
-// into the Arcalist storage format so they're immediately visible.
+import { setBookmarkMap } from "./chromeBookmarkMap";
+import type { ArcalistState, Board, Bookmark } from "../types";
 
-const STORAGE_KEY = 'arcalist_state'
+const STORAGE_KEY = "arcalist_state";
+const IMPORT_FLAG_KEY = "arcalist_chrome_imported";
+const HOME_PAGE_TITLE = "Home";
+const IMPORTED_PAGE_TITLE = "Imported";
 
 function generateId(): string {
-  return Math.random().toString(36).slice(2, 9)
+  return Math.random().toString(36).slice(2, 9);
 }
 
-function makeFavicon(url: string): string {
+function favicon(url: string): string {
   try {
-    const domain = new URL(url).hostname
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`
+    const domain = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
   } catch {
-    return ''
+    return "";
   }
 }
 
-// Recursively collect every bookmark URL inside a node (flattens sub-folders)
-function collectBookmarks(
-  node: chrome.bookmarks.BookmarkTreeNode,
-): { id: string; title: string; url: string; favicon: string; createdAt: number }[] {
-  const out: { id: string; title: string; url: string; favicon: string; createdAt: number }[] = []
+function normalizeUrl(rawUrl: string): string | null {
+  try {
+    return new URL(rawUrl).toString();
+  } catch {
+    return null;
+  }
+}
 
-  if (node.url) {
-    out.push({
+export function createBookmarkFromNode(
+  node: chrome.bookmarks.BookmarkTreeNode
+): Bookmark | null {
+  if (!node.url) return null;
+  const url = normalizeUrl(node.url);
+  if (!url) return null;
+  return {
+    id: generateId(),
+    title: node.title || url,
+    url,
+    favicon: favicon(url),
+    chromeBookmarkId: node.id,
+    createdAt: node.dateAdded || Date.now(),
+  };
+}
+
+export function createBoardFromFolder(
+  folder: chrome.bookmarks.BookmarkTreeNode,
+  order: number
+): Board {
+  return {
+    id: generateId(),
+    title: folder.title || "Bookmarks",
+    order,
+    bookmarks: [],
+    chromeFolderId: folder.id,
+  };
+}
+
+function getHomePage(state: ArcalistState, overwrite: boolean) {
+  const pages = state.pages.map((page) => ({
+    ...page,
+    boards: page.boards.map((board) => ({
+      ...board,
+      bookmarks: [...board.bookmarks],
+    })),
+  }));
+
+  let pageIndex = pages.findIndex((page) => page.title === HOME_PAGE_TITLE);
+  if (pageIndex === -1) {
+    pages.push({
       id: generateId(),
-      title: node.title || node.url,
-      url: node.url,
-      favicon: makeFavicon(node.url),
-      createdAt: Date.now(),
-    })
+      title: HOME_PAGE_TITLE,
+      order: pages.length,
+      boards: [],
+    });
+    pageIndex = pages.length - 1;
+  } else if (overwrite) {
+    pages[pageIndex] = {
+      ...pages[pageIndex],
+      boards: [],
+    };
   }
 
-  for (const child of node.children ?? []) {
-    out.push(...collectBookmarks(child))
-  }
-
-  return out
+  return { pages, pageIndex };
 }
 
-export async function importChromeBookmarks(): Promise<void> {
-  // Never overwrite an existing state — user may have already added bookmarks
-  const existing = await chrome.storage.local.get(STORAGE_KEY)
-  if (existing[STORAGE_KEY]) return
+function buildBoardUrlMap(state: ArcalistState): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  for (const page of state.pages) {
+    for (const board of page.boards) {
+      const set = new Set<string>();
+      for (const bookmark of board.bookmarks) {
+        set.add(bookmark.url);
+      }
+      map.set(board.id, set);
+    }
+  }
+  return map;
+}
 
-  const tree = await chrome.bookmarks.getTree()
-  const root = tree[0]
-  if (!root?.children) return
+function mergeImportedPageIntoHome(
+  state: ArcalistState
+): ArcalistState | null {
+  const pages = state.pages.map((page) => ({
+    ...page,
+    boards: page.boards.map((board) => ({
+      ...board,
+      bookmarks: [...board.bookmarks],
+    })),
+  }));
 
-  // Chrome root always has two children:
-  //   id "1" → Bookmarks bar
-  //   id "2" → Other bookmarks
-  // (Mobile bookmarks / "3" may also appear on some profiles)
-  const pages: {
-    id: string
-    title: string
-    order: number
-    boards: {
-      id: string
-      title: string
-      order: number
-      bookmarks: { id: string; title: string; url: string; favicon: string; createdAt: number }[]
-    }[]
-  }[] = []
+  const importedIndex = pages.findIndex(
+    (page) => page.title === IMPORTED_PAGE_TITLE
+  );
+  if (importedIndex === -1) return null;
 
-  for (const topFolder of root.children) {
-    if (!topFolder.children || topFolder.children.length === 0) continue
+  let homeIndex = pages.findIndex((page) => page.title === HOME_PAGE_TITLE);
+  if (homeIndex === -1) {
+    pages.unshift({
+      id: generateId(),
+      title: HOME_PAGE_TITLE,
+      order: 0,
+      boards: [],
+    });
+    homeIndex = 0;
+  }
 
-    const boards: typeof pages[0]['boards'] = []
-    const directBookmarks: typeof pages[0]['boards'][0]['bookmarks'] = []
+  const homePage = pages[homeIndex];
+  const importedPage = pages[importedIndex];
 
-    for (const child of topFolder.children) {
+  for (const importedBoard of importedPage.boards) {
+    const existingBoard = homePage.boards.find(
+      (board) => board.title === importedBoard.title
+    );
+
+    if (!existingBoard) {
+      homePage.boards.push(importedBoard);
+      continue;
+    }
+
+    const existingUrls = new Set(
+      existingBoard.bookmarks.map((bookmark) => bookmark.url)
+    );
+    for (const bookmark of importedBoard.bookmarks) {
+      if (existingUrls.has(bookmark.url)) continue;
+      existingBoard.bookmarks.push(bookmark);
+      existingUrls.add(bookmark.url);
+    }
+  }
+
+  pages.splice(importedIndex, 1);
+  pages.forEach((page, index) => {
+    page.order = index;
+  });
+
+  const activePageId =
+    state.activePageId === importedPage.id
+      ? homePage.id
+      : state.activePageId;
+
+  return {
+    ...state,
+    pages,
+    activePageId,
+    updatedAt: Date.now(),
+  };
+}
+
+export async function parseBookmarkTree(
+  root: chrome.bookmarks.BookmarkTreeNode,
+  state: ArcalistState,
+  overwriteImportedPage: boolean
+): Promise<{ state: ArcalistState; map: Record<string, string> } | null> {
+  const { pages, pageIndex } = getHomePage(state, overwriteImportedPage);
+  const homePage = pages[pageIndex];
+  const map: Record<string, string> = {};
+  const boardUrlMap = buildBoardUrlMap({ ...state, pages });
+
+  let hasChanges = false;
+
+  function findBoardById(boardId: string): Board | null {
+    for (const page of pages) {
+      const board = page.boards.find((b) => b.id === boardId);
+      if (board) return board;
+    }
+    return null;
+  }
+
+  function ensureBoard(folder: chrome.bookmarks.BookmarkTreeNode): Board {
+    const folderId = folder.id;
+    const mappedId = folderId ? map[folderId] : undefined;
+    const mappedBoard = mappedId ? findBoardById(mappedId) : null;
+    if (mappedBoard) {
+      if (!mappedBoard.chromeFolderId) {
+        mappedBoard.chromeFolderId = folder.id;
+      }
+      return mappedBoard;
+    }
+
+    const newBoard = createBoardFromFolder(folder, homePage.boards.length);
+    homePage.boards.push(newBoard);
+    if (folderId) {
+      map[folderId] = newBoard.id;
+    }
+    hasChanges = true;
+    return newBoard;
+  }
+
+  function addBookmarkToBoard(board: Board, bookmark: Bookmark) {
+    const existingUrls =
+      boardUrlMap.get(board.id) ?? new Set<string>();
+    if (existingUrls.has(bookmark.url)) return;
+    board.bookmarks.push(bookmark);
+    existingUrls.add(bookmark.url);
+    boardUrlMap.set(board.id, existingUrls);
+    hasChanges = true;
+  }
+
+  function parseFolder(folder: chrome.bookmarks.BookmarkTreeNode): boolean {
+    let hasContent = false;
+    let board: Board | null = null;
+
+    for (const child of folder.children ?? []) {
       if (child.url) {
-        // Bookmark sitting directly in the bar / Other Bookmarks root
-        directBookmarks.push({
-          id: generateId(),
-          title: child.title || child.url,
-          url: child.url,
-          favicon: makeFavicon(child.url),
-          createdAt: Date.now(),
-        })
+        const bookmark = createBookmarkFromNode(child);
+        if (!bookmark) continue;
+        if (!board) board = ensureBoard(folder);
+        addBookmarkToBoard(board, bookmark);
+        hasContent = true;
       } else {
-        // Sub-folder → Board (collect all bookmarks inside recursively)
-        const bms = collectBookmarks(child)
-        if (bms.length > 0) {
-          boards.push({
-            id: generateId(),
-            title: child.title || 'Bookmarks',
-            order: boards.length,
-            bookmarks: bms,
-          })
-        }
+        const childHasContent = parseFolder(child);
+        if (childHasContent) hasContent = true;
       }
     }
 
-    // Unsorted bookmarks at the top of the bar become their own board
-    if (directBookmarks.length > 0) {
-      boards.unshift({
-        id: generateId(),
-        title: 'Quick Access',
-        order: 0,
-        bookmarks: directBookmarks,
-      })
-      boards.forEach((b, i) => { b.order = i })
+    if (hasContent && !board) {
+      ensureBoard(folder);
     }
 
-    if (boards.length === 0) continue
-
-    const pageName =
-      topFolder.id === '1' ? 'Bookmarks Bar'
-      : topFolder.id === '2' ? 'Other Bookmarks'
-      : topFolder.title || 'Bookmarks'
-
-    pages.push({
-      id: generateId(),
-      title: pageName,
-      order: pages.length,
-      boards,
-    })
+    return hasContent;
   }
 
-  if (pages.length === 0) return
-
-  const initialState = {
-    pages,
-    activePageId: pages[0].id,
-    trash: [],
-    privacyMode: false,
-    updatedAt: Date.now(),
-    settings: {
-      openInNewTab: false,
-      shortenTitles: true,
-      compactMode: false,
-      showDescriptions: false,
-    },
-    wallpaperTheme: {
-      id: 'default-dark',
-      name: 'Default',
-      url: null,
-      isDark: true,
-      accentColor: '#00d285',
-    },
+  for (const topFolder of root.children ?? []) {
+    parseFolder(topFolder);
   }
 
-  await chrome.storage.local.set({ [STORAGE_KEY]: initialState })
-  console.log(
-    `[Arcalist] Imported ${pages.reduce((acc, p) => acc + p.boards.reduce((a, b) => a + b.bookmarks.length, 0), 0)} bookmarks across ${pages.length} page(s)`
-  )
+  const activePageId = state.activePageId || pages[0]?.id || "";
+
+  if (!hasChanges) return null;
+
+  return {
+    state: {
+      ...state,
+      pages,
+      activePageId,
+      updatedAt: Date.now(),
+    },
+    map,
+  };
+}
+
+export async function importChromeBookmarks(
+  existingState?: ArcalistState
+): Promise<ArcalistState | null> {
+  const stored = await chrome.storage.local.get([
+    STORAGE_KEY,
+    IMPORT_FLAG_KEY,
+  ]);
+
+  const state = (existingState ?? stored[STORAGE_KEY]) as
+    | ArcalistState
+    | undefined;
+  if (!state) return null;
+
+  const migrated = mergeImportedPageIntoHome(state);
+  if (migrated) {
+    await chrome.storage.local.set({ [STORAGE_KEY]: migrated });
+    return migrated;
+  }
+
+  const homePage = state.pages.find((page) => page.title === HOME_PAGE_TITLE);
+  const importedCount = homePage
+    ? homePage.boards.reduce(
+        (acc, board) => acc + board.bookmarks.length,
+        0,
+      )
+    : 0;
+  const forceReimport = Boolean(stored[IMPORT_FLAG_KEY]) && importedCount === 0;
+
+  if (stored[IMPORT_FLAG_KEY] && !forceReimport) return null;
+
+  const tree = await chrome.bookmarks.getTree();
+  const root = tree[0];
+  if (!root?.children) {
+    await chrome.storage.local.set({ [IMPORT_FLAG_KEY]: true });
+    return null;
+  }
+
+  const parsed = await parseBookmarkTree(root, state, forceReimport);
+  if (!parsed) {
+    await chrome.storage.local.set({ [IMPORT_FLAG_KEY]: true });
+    return null;
+  }
+
+  await chrome.storage.local.set({
+    [STORAGE_KEY]: parsed.state,
+    [IMPORT_FLAG_KEY]: true,
+  });
+  await setBookmarkMap(parsed.map);
+
+  return parsed.state;
 }

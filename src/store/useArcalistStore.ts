@@ -2,6 +2,9 @@ import { create } from "zustand";
 import { generateId } from "../lib/id";
 import { saveState, loadState } from "../lib/storage";
 import { pushToCloud, pullFromCloud, resolveConflict } from "../lib/sync";
+import { autoSyncChromeBookmarks } from "../lib/autoSync.ts";
+import { importChromeBookmarks } from "../lib/importBookmarks";
+import { addMapping, getBookmarkMap, removeMapping } from "../lib/chromeBookmarkMap";
 import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
 import { DEFAULT_WALLPAPER } from "../data/wallpapers";
@@ -26,12 +29,25 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, ms: number) {
   };
 }
 
+const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+function buildFavicon(url: string): string {
+  try {
+    const domain = new URL(url).hostname;
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  } catch {
+    return "";
+  }
+}
+
 type ArcalistStore = ArcalistState & {
   // Auth state
   user: User | null;
   syncStatus: "idle" | "syncing" | "synced" | "error";
   signingIn: boolean;
   signInError: string | null;
+  hydrated: boolean;
+  authReady: boolean;
 
   // Initialization & auth
   initialize: () => Promise<void>;
@@ -56,6 +72,11 @@ type ArcalistStore = ArcalistState & {
     bookmark: Omit<Bookmark, "id" | "createdAt">,
   ) => void;
   deleteBookmark: (boardId: string, bookmarkId: string) => void;
+  updateBookmark: (
+    boardId: string,
+    bookmarkId: string,
+    updates: Partial<Pick<Bookmark, "title" | "url" | "description">>,
+  ) => void;
   moveBookmark: (
     fromBoardId: string,
     toBoardId: string,
@@ -80,6 +101,7 @@ type ArcalistStore = ArcalistState & {
   restoreBookmark: (bookmarkId: string) => void;
   permanentlyDelete: (bookmarkId: string) => void;
   clearTrash: () => void;
+  cleanupTrash: () => void;
 
   // Internal
   _persist: () => void;
@@ -92,6 +114,161 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
   const debouncedSync = debounce(() => {
     get()._syncToCloud();
   }, 2000);
+
+  const createTrashedItem = (
+    bookmark: Bookmark,
+    board: Board,
+    page: Page,
+  ): TrashedBookmark => ({
+    bookmark: { ...bookmark, isTrashed: true },
+    deletedAt: Date.now(),
+    fromBoardTitle: board.title,
+    fromPageTitle: page.title,
+    fromBoardId: board.id,
+    fromPageId: page.id,
+  });
+
+  const canUseChromeBookmarks = () =>
+    typeof chrome !== "undefined" && !!chrome.bookmarks;
+
+  const findBoardById = (boardId: string) =>
+    get()
+      .pages.flatMap((p) => p.boards)
+      .find((b) => b.id === boardId) ?? null;
+
+  const resolveChromeFolderId = async (boardId: string) => {
+    const board = findBoardById(boardId);
+    if (board?.chromeFolderId) return board.chromeFolderId;
+    const map = await getBookmarkMap();
+    const match = Object.entries(map).find(([, id]) => id === boardId);
+    return match?.[0] ?? null;
+  };
+
+  const ensureChromeFolderForBoard = async (boardId: string, title: string) => {
+    if (!canUseChromeBookmarks()) return null;
+    const existing = await resolveChromeFolderId(boardId);
+    if (existing) return existing;
+    try {
+      const folder = await chrome.bookmarks.create({
+        parentId: "1",
+        title,
+      });
+      if (!folder?.id) return null;
+      await addMapping(folder.id, boardId);
+      set((state) => ({
+        pages: state.pages.map((p) => ({
+          ...p,
+          boards: p.boards.map((b) =>
+            b.id === boardId ? { ...b, chromeFolderId: folder.id } : b,
+          ),
+        })),
+      }));
+      return folder.id;
+    } catch (err) {
+      console.error("[Arcalist] Failed to create Chrome folder:", err);
+      return null;
+    }
+  };
+
+  const removeChromeFolderTree = async (boardId: string) => {
+    if (!canUseChromeBookmarks()) return;
+    const folderId = await resolveChromeFolderId(boardId);
+    if (!folderId) return;
+    try {
+      await chrome.bookmarks.removeTree(folderId);
+      await removeMapping(folderId);
+    } catch (err) {
+      console.error("[Arcalist] Failed to remove Chrome folder:", err);
+    }
+  };
+
+  const collectBoardIdsForFolderTree = async (boardId: string) => {
+    if (!canUseChromeBookmarks()) return [boardId];
+    const folderId = await resolveChromeFolderId(boardId);
+    if (!folderId) return [boardId];
+    try {
+      const tree = await chrome.bookmarks.getSubTree(folderId);
+      const folderIds = new Set<string>();
+      const walk = (node: chrome.bookmarks.BookmarkTreeNode) => {
+        if (!node.url) folderIds.add(node.id);
+        for (const child of node.children ?? []) {
+          walk(child);
+        }
+      };
+      if (tree[0]) walk(tree[0]);
+
+      const map = await getBookmarkMap();
+      const boardIds = new Set<string>();
+      for (const id of folderIds) {
+        const mappedBoardId = map[id];
+        if (mappedBoardId) boardIds.add(mappedBoardId);
+      }
+
+      for (const board of get().pages.flatMap((p) => p.boards)) {
+        if (board.chromeFolderId && folderIds.has(board.chromeFolderId)) {
+          boardIds.add(board.id);
+        }
+      }
+
+      boardIds.add(boardId);
+      return Array.from(boardIds);
+    } catch (err) {
+      console.error("[Arcalist] Failed to read Chrome folder tree:", err);
+      return [boardId];
+    }
+  };
+
+  const removeChromeBookmark = async (
+    boardId: string,
+    bookmark: Bookmark,
+  ) => {
+    if (!canUseChromeBookmarks()) return;
+    if (bookmark.chromeBookmarkId) {
+      try {
+        await chrome.bookmarks.remove(bookmark.chromeBookmarkId);
+      } catch (err) {
+        console.error("[Arcalist] Failed to remove Chrome bookmark:", err);
+      }
+      return;
+    }
+
+    const folderId = await resolveChromeFolderId(boardId);
+    if (!folderId) return;
+    try {
+      const children = await chrome.bookmarks.getChildren(folderId);
+      const match = children.find(
+        (child) => child.url === bookmark.url && child.title === bookmark.title,
+      );
+      if (match?.id) {
+        await chrome.bookmarks.remove(match.id);
+      }
+    } catch (err) {
+      console.error("[Arcalist] Failed to locate Chrome bookmark:", err);
+    }
+  };
+
+  const createChromeBookmark = async (
+    boardId: string,
+    bookmark: Bookmark,
+  ) => {
+    if (!canUseChromeBookmarks()) return null;
+    const board = findBoardById(boardId);
+    const folderId = await ensureChromeFolderForBoard(
+      boardId,
+      board?.title ?? "Bookmarks",
+    );
+    try {
+      const created = await chrome.bookmarks.create({
+        parentId: folderId ?? "1",
+        title: bookmark.title,
+        url: bookmark.url,
+      });
+      return created?.id ?? null;
+    } catch (err) {
+      console.error("[Arcalist] Failed to create Chrome bookmark:", err);
+      return null;
+    }
+  };
 
   return {
     // ─── Initial State ─────────────────────────────────────────
@@ -106,6 +283,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     syncStatus: "idle",
     signingIn: false,
     signInError: null,
+    hydrated: false,
+    authReady: false,
 
     // ─── Initialization ───────────────────────────────────────
     initialize: async () => {
@@ -117,45 +296,52 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           privacyMode: local.privacyMode ?? false,
           trash: local.trash ?? [],
           updatedAt: local.updatedAt ?? 0,
+          settings: { ...defaultState.settings, ...local.settings },
+          hydrated: true,
         });
         if (local.wallpaperTheme) applyTheme(local.wallpaperTheme);
       } else {
         const initial = { ...defaultState, updatedAt: Date.now() };
-        set(initial);
+        set({ ...initial, hydrated: true });
         saveState(initial);
         applyTheme(initial.wallpaperTheme);
       }
 
-      // 2. Check for existing Supabase session
+      // 2. Check for existing Supabase session (fast local read)
       const {
         data: { session },
       } = await supabase.auth.getSession();
-      if (session?.user) {
-        set({ user: session.user });
+      set({ user: session?.user ?? null, authReady: true });
 
-        // 3. Pull from cloud and resolve conflict
-        const remote = await pullFromCloud(session.user.id);
-        if (remote) {
-          const currentLocal = await loadState();
-          const winner = currentLocal
-            ? resolveConflict(currentLocal, remote)
-            : remote;
-          set(winner);
-          saveState(winner);
+      const maybeImportChrome = async () => {
+        const current = (await loadState()) ?? get();
+        const imported = await importChromeBookmarks(current as ArcalistState);
+        if (imported) {
+          set(imported);
+          if (imported.wallpaperTheme) {
+            applyTheme(imported.wallpaperTheme);
+          }
         }
-      }
+      };
 
-      // 4. Listen for auth changes (sign in / sign out)
+      // 3. Listen for auth changes (sign in / sign out)
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
-          set({ user: session.user });
+          set({ user: session.user, authReady: true });
           // Pull remote state on sign in
           const remote = await pullFromCloud(session.user.id);
           if (remote) {
             // Remote exists — always use it on sign in
             // User's cloud data is the source of truth
-            set({ ...remote, user: session.user, privacyMode: false });
-            saveState({ ...remote, privacyMode: false });
+            const merged = {
+              ...remote,
+              settings: { ...defaultState.settings, ...remote.settings },
+              user: session.user,
+              privacyMode: false,
+            };
+            set(merged);
+            saveState(merged);
+            await maybeImportChrome();
           } else {
             // No remote data yet — first time signing in
             // Push current local state up to cloud
@@ -165,11 +351,49 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
               set({ syncStatus: "synced" });
               setTimeout(() => set({ syncStatus: "idle" }), 2000);
             }
+            await maybeImportChrome();
           }
         } else if (event === "SIGNED_OUT") {
-          set({ user: null, syncStatus: "idle" });
+          set({ user: null, syncStatus: "idle", authReady: true });
         }
       });
+
+      const runBackgroundTasks = async () => {
+        if (session?.user) {
+          const remote = await pullFromCloud(session.user.id);
+          if (remote) {
+            const currentLocal = (await loadState()) ?? get();
+            const winner = currentLocal
+              ? resolveConflict(currentLocal, remote)
+              : remote;
+            const merged = {
+              ...winner,
+              settings: { ...defaultState.settings, ...winner.settings },
+            };
+            set(merged);
+            saveState(merged);
+          }
+        }
+
+        await maybeImportChrome();
+
+        const syncChanged = await autoSyncChromeBookmarks(
+          { ...get() } as ArcalistState,
+        );
+        if (syncChanged) {
+          const syncedState = await loadState();
+          if (syncedState) {
+            set(syncedState);
+            if (syncedState.wallpaperTheme) {
+              applyTheme(syncedState.wallpaperTheme);
+            }
+          }
+        }
+
+        get().cleanupTrash();
+      };
+
+      void runBackgroundTasks();
     },
 
     // ─── Auth ─────────────────────────────────────────────────
@@ -250,8 +474,12 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
             const winner = currentLocal
               ? resolveConflict(currentLocal, remote)
               : remote;
-            set(winner);
-            saveState(winner);
+            const merged = {
+              ...winner,
+              settings: { ...defaultState.settings, ...winner.settings },
+            };
+            set(merged);
+            saveState(merged);
           } else {
             // First sign in — push local state up
             const currentLocal = await loadState();
@@ -369,11 +597,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     deletePage: (pageId) => {
       if (get().pages.length <= 1) return;
+      const pageToDelete = get().pages.find((p) => p.id === pageId);
+      if (!pageToDelete) return;
+      for (const board of pageToDelete.boards) {
+        void removeChromeFolderTree(board.id);
+      }
+      const trashedItems = pageToDelete.boards.flatMap((board) =>
+        board.bookmarks.map((bookmark) =>
+          createTrashedItem(bookmark, board, pageToDelete),
+        ),
+      );
       set((state) => {
         const filtered = state.pages.filter((p) => p.id !== pageId);
         const newActiveId =
           state.activePageId === pageId ? filtered[0].id : state.activePageId;
-        return { pages: filtered, activePageId: newActiveId };
+        return {
+          pages: filtered,
+          activePageId: newActiveId,
+          trash: [...state.trash, ...trashedItems],
+        };
       });
       get()._persist();
     },
@@ -403,14 +645,51 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     deleteBoard: (pageId, boardId) => {
+      const page = get().pages.find((p) => p.id === pageId);
+      const board = page?.boards.find((b) => b.id === boardId);
+      if (!page || !board) return;
+      void removeChromeFolderTree(boardId);
+      const trashedItems = board.bookmarks.map((bookmark) =>
+        createTrashedItem(bookmark, board, page),
+      );
       set((state) => ({
         pages: state.pages.map((p) =>
           p.id === pageId
             ? { ...p, boards: p.boards.filter((b) => b.id !== boardId) }
             : p,
         ),
+        trash: [...state.trash, ...trashedItems],
       }));
       get()._persist();
+
+      void (async () => {
+        const boardIds = await collectBoardIdsForFolderTree(boardId);
+        const extraBoardIds = boardIds.filter((id) => id !== boardId);
+        if (extraBoardIds.length === 0) return;
+        set((state) => {
+          const extraBoards = state.pages
+            .flatMap((p) => p.boards)
+            .filter((b) => extraBoardIds.includes(b.id));
+          if (extraBoards.length === 0) return state;
+          const extraTrash = extraBoards.flatMap((b) => {
+            const owningPage = state.pages.find((p) =>
+              p.boards.some((board) => board.id === b.id),
+            );
+            if (!owningPage) return [];
+            return b.bookmarks.map((bookmark) =>
+              createTrashedItem(bookmark, b, owningPage),
+            );
+          });
+          return {
+            pages: state.pages.map((p) => ({
+              ...p,
+              boards: p.boards.filter((b) => !extraBoardIds.includes(b.id)),
+            })),
+            trash: [...state.trash, ...extraTrash],
+          };
+        });
+        get()._persist();
+      })();
     },
 
     renameBoard: (pageId, boardId, title) => {
@@ -463,17 +742,30 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     deleteBookmark: (boardId, bookmarkId) => {
+      get().trashBookmark(boardId, bookmarkId);
+    },
+
+    updateBookmark: (boardId, bookmarkId, updates) => {
       set((state) => ({
         pages: state.pages.map((p) => ({
           ...p,
-          boards: p.boards.map((b) =>
-            b.id === boardId
-              ? {
-                  ...b,
-                  bookmarks: b.bookmarks.filter((bm) => bm.id !== bookmarkId),
+          boards: p.boards.map((b) => {
+            if (b.id !== boardId) return b;
+            return {
+              ...b,
+              bookmarks: b.bookmarks.map((bm) => {
+                if (bm.id !== bookmarkId) return bm;
+                const next: Bookmark = { ...bm, ...updates };
+                if (updates.description === "") {
+                  next.description = undefined;
                 }
-              : b,
-          ),
+                if (updates.url && updates.url !== bm.url) {
+                  next.favicon = buildFavicon(updates.url);
+                }
+                return next;
+              }),
+            };
+          }),
         })),
       }));
       get()._persist();
@@ -543,26 +835,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Trash ────────────────────────────────────────────────
     trashBookmark: (boardId, bookmarkId) => {
-      let fromBoardTitle = "";
-      let fromPageTitle = "";
+      let targetBoard: Board | null = null;
+      let targetPage: Page | null = null;
       let bookmark: Bookmark | undefined;
       for (const page of get().pages) {
         for (const board of page.boards) {
           if (board.id === boardId) {
-            fromBoardTitle = board.title;
-            fromPageTitle = page.title;
+            targetBoard = board;
+            targetPage = page;
             bookmark = board.bookmarks.find((bm) => bm.id === bookmarkId);
           }
         }
       }
-      if (!bookmark) return;
-      const trashedItem: TrashedBookmark = {
+      if (!bookmark || !targetBoard || !targetPage) return;
+      void removeChromeBookmark(boardId, bookmark);
+      const trashedItem = createTrashedItem(
         bookmark,
-        deletedAt: Date.now(),
-        fromBoardTitle,
-        fromPageTitle,
-        fromBoardId: boardId,
-      };
+        targetBoard,
+        targetPage,
+      );
       set((state) => ({
         trash: [...state.trash, trashedItem],
         pages: state.pages.map((p) => ({
@@ -583,24 +874,64 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     restoreBookmark: (bookmarkId) => {
       const trashItem = get().trash.find((t) => t.bookmark.id === bookmarkId);
       if (!trashItem) return;
-      const targetBoardId = get()
+      let targetBoardId = get()
         .pages.flatMap((p) => p.boards)
         .find((b) => b.id === trashItem.fromBoardId)
         ? trashItem.fromBoardId
-        : get().pages[0]?.boards[0]?.id;
+        : undefined;
+
+      if (!targetBoardId && trashItem.fromPageId) {
+        const page = get().pages.find((p) => p.id === trashItem.fromPageId);
+        targetBoardId = page?.boards[0]?.id;
+      }
+
+      if (!targetBoardId) {
+        targetBoardId = get().pages[0]?.boards[0]?.id;
+      }
       if (!targetBoardId) return;
+      const restoredBookmark: Bookmark = {
+        ...trashItem.bookmark,
+        isTrashed: false,
+        chromeBookmarkId: undefined,
+      };
       set((state) => ({
         trash: state.trash.filter((t) => t.bookmark.id !== bookmarkId),
         pages: state.pages.map((p) => ({
           ...p,
           boards: p.boards.map((b) =>
             b.id === targetBoardId
-              ? { ...b, bookmarks: [...b.bookmarks, trashItem.bookmark] }
+              ? { ...b, bookmarks: [...b.bookmarks, restoredBookmark] }
               : b,
           ),
         })),
       }));
       get()._persist();
+
+      void (async () => {
+        const chromeBookmarkId = await createChromeBookmark(
+          targetBoardId,
+          restoredBookmark,
+        );
+        if (!chromeBookmarkId) return;
+        set((state) => ({
+          pages: state.pages.map((p) => ({
+            ...p,
+            boards: p.boards.map((b) =>
+              b.id === targetBoardId
+                ? {
+                    ...b,
+                    bookmarks: b.bookmarks.map((bm) =>
+                      bm.id === restoredBookmark.id
+                        ? { ...bm, chromeBookmarkId }
+                        : bm,
+                    ),
+                  }
+                : b,
+            ),
+          })),
+        }));
+        get()._persist();
+      })();
     },
 
     permanentlyDelete: (bookmarkId) => {
@@ -611,7 +942,22 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     clearTrash: () => {
+      const items = get().trash;
       set({ trash: [] });
+      get()._persist();
+      void (async () => {
+        for (const item of items) {
+          await removeChromeBookmark(item.fromBoardId, item.bookmark);
+        }
+      })();
+    },
+
+    cleanupTrash: () => {
+      const cutoff = Date.now() - TRASH_RETENTION_MS;
+      const current = get().trash;
+      const filtered = current.filter((item) => item.deletedAt >= cutoff);
+      if (filtered.length === current.length) return;
+      set({ trash: filtered });
       get()._persist();
     },
   };

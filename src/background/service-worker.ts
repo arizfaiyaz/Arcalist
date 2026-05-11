@@ -4,6 +4,10 @@ import {
   removeMapping,
 } from "../lib/chromeBookmarkMap";
 import { importChromeBookmarks } from "../lib/importBookmarks";
+import {
+  initializeAutoSync,
+  handleAutoSyncAlarm,
+} from "../lib/autoSync";
 import type { ArcalistState } from "../types";
 
 const STORAGE_KEY = "arcalist_state";
@@ -36,12 +40,22 @@ function notifyNewTab() {
 // ─── Install ─────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log("[Arcalist] Installed");
 
   // On a fresh install pull in all existing Chrome bookmarks so the user
   // sees their bookmarks immediately without any manual import step.
   if (details.reason === "install") {
     await importChromeBookmarks();
+  }
+
+  // Initialize auto-sync on install or update
+  await initializeAutoSync();
+});
+
+// ─── Auto-Sync Alarm ──────────────────────────────────────
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === "arcalist-auto-sync") {
+    await handleAutoSyncAlarm();
   }
 });
 
@@ -70,11 +84,17 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   const firstPage = state.pages?.[0];
   if (!firstPage) return;
+  const preferredBoardId = state.settings?.defaultCaptureBoardId;
+  let targetBoard = preferredBoardId
+    ? firstPage.boards?.find((b: { id: string }) => b.id === preferredBoardId)
+    : null;
 
-  const targetBoard =
-    firstPage.boards?.find(
-      (b: { title: string }) => b.title.toLowerCase() === "inbox",
-    ) ?? firstPage.boards?.[0];
+  if (!targetBoard) {
+    targetBoard =
+      firstPage.boards?.find(
+        (b: { title: string }) => b.title.toLowerCase() === "inbox",
+      ) ?? firstPage.boards?.[0];
+  }
 
   if (!targetBoard) return;
 
@@ -107,6 +127,7 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
       title: bookmark.title || "New Board",
       order: 0,
       bookmarks: [],
+      chromeFolderId: id,
     };
 
     // Add to the first page
@@ -140,6 +161,7 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
       title: bookmark.title || domain,
       url: bookmark.url,
       favicon: favicon(domain),
+      chromeBookmarkId: id,
       createdAt: Date.now(),
     };
 

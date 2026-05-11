@@ -29,8 +29,11 @@ export function BoardCard({
 }: Props) {
   const addBookmark = useArcalistStore((state) => state.addBookmark);
   const deleteBoard = useArcalistStore((state) => state.deleteBoard);
+  const { compactMode, smartTruncation, visibilityThreshold } =
+    useArcalistStore((state) => state.settings);
   const [adding, setAdding] = useState(false);
   const [newUrl, setNewUrl] = useState("");
+  const [showAll, setShowAll] = useState(false);
 
   const privacyMode = useArcalistStore((state) => state.privacyMode);
   // Make the board itself sortable (for reordering boards)
@@ -64,7 +67,12 @@ export function BoardCard({
     opacity: isDragging ? 0 : 1,
   };
 
-  const bookmarkIds = board.bookmarks.map((bm) => bm.id);
+  const threshold = Math.max(1, visibilityThreshold || 10);
+  const shouldTruncate = smartTruncation && board.bookmarks.length > threshold;
+  const visibleBookmarks = shouldTruncate && !showAll
+    ? board.bookmarks.slice(0, threshold)
+    : board.bookmarks;
+  const bookmarkIds = visibleBookmarks.map((bm) => bm.id);
 
   const handleAddBookmark = () => {
     const trimmed = newUrl.trim();
@@ -95,7 +103,8 @@ export function BoardCard({
       ref={setRef}
       style={style}
       className={cn(
-        "bg-surface rounded-xl p-3 h-fit",
+        "bg-surface rounded-xl h-fit",
+        compactMode ? "p-2" : "p-3",
         "border border-white/5 transition-colors duration-200",
         "hover:border-white/10",
         // Highlight when a bookmark is dragged over this board
@@ -151,8 +160,8 @@ export function BoardCard({
         items={bookmarkIds}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-col gap-0.5 min-h-8px">
-          {board.bookmarks.map((bookmark) => (
+        <div className={cn("flex flex-col min-h-8px", compactMode ? "gap-0" : "gap-0.5")}>
+          {visibleBookmarks.map((bookmark) => (
             <BookmarkItem
               key={bookmark.id}
               bookmark={bookmark}
@@ -164,6 +173,20 @@ export function BoardCard({
           ))}
         </div>
       </SortableContext>
+
+      {shouldTruncate && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className={cn(
+            "mt-2 w-full text-xs text-slate-500 hover:text-white",
+            "transition-colors text-left",
+          )}
+        >
+          {showAll
+            ? "Show less"
+            : `Show more (${board.bookmarks.length - threshold})`}
+        </button>
+      )}
 
       {/* Add bookmark input */}
       {adding && (

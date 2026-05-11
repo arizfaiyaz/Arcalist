@@ -141,7 +141,7 @@ export function TrashPanel({ open, onClose }: Props) {
                   className="text-yellow-500/70 shrink-0 mt-0.5"
                 />
                 <p className="text-[10px] text-slate-500">
-                  Items in trash are permanently deleted after 30 days.
+                  Items in trash are permanently deleted after 7 days.
                 </p>
               </div>
             </div>

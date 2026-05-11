@@ -16,7 +16,9 @@ export function NewTabPage() {
   const activePageId = useArcalistStore((state) => state.activePageId);
   const setActivePage = useArcalistStore((state) => state.setActivePage);
   const addPage = useArcalistStore((state) => state.addPage);
+  const deletePage = useArcalistStore((state) => state.deletePage);
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
+  const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
   const wallpaperTheme = useArcalistStore((state) => state.wallpaperTheme);
 
   const [searchOpen, setSearchOpen] = useState(false);
@@ -45,6 +47,12 @@ export function NewTabPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  useEffect(() => {
+    cleanupTrash();
+    const interval = setInterval(() => cleanupTrash(), 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [cleanupTrash]);
 
   const handleBookmarkSelect = (bookmarkId: string, boardId: string) => {
     setSelectedBookmarks((prev) => {
@@ -86,6 +94,7 @@ export function NewTabPage() {
         activePageId={activePageId}
         onPageChange={setActivePage}
         onAddPage={addPage}
+        onDeletePage={deletePage}
       />
 
       <BoardGrid

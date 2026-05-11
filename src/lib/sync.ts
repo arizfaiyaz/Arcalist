@@ -6,7 +6,7 @@ export async function pushToCloud(
   state: ArcalistState
 ): Promise<void> {
   const { error } = await supabase
-    .from('arcalist-workspaces')
+    .from('arcalist_workspaces')
     .upsert({
       user_id: userId,
       state,

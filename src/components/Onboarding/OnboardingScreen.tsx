@@ -1,8 +1,7 @@
 import { useState } from 'react'
-import { Cloud, BookMarked, Layers, ShieldCheck, ArrowRight, Loader2 } from 'lucide-react'
+import { Cloud, BookMarked, Layers, ShieldCheck, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useArcalistStore } from '../../store/useArcalistStore'
-import { markOnboarded } from '../../lib/onboarding'
 
 type Props = {
   onComplete: () => void
@@ -22,7 +21,6 @@ export function OnboardingScreen({ onComplete }: Props) {
       // Auth state change in store will handle loading cloud data
       // Wait briefly for auth to settle then complete onboarding
       await new Promise((r) => setTimeout(r, 2000))
-      await markOnboarded()
       onComplete()
     } catch {
       setLoading(false)
@@ -30,14 +28,9 @@ export function OnboardingScreen({ onComplete }: Props) {
     }
   }
 
-  const handleSkip = async () => {
-    await markOnboarded()
-    onComplete()
-  }
-
   // If user signed in during this flow, complete automatically
   if (user && step === 'signingIn') {
-    markOnboarded().then(onComplete)
+    Promise.resolve().then(onComplete)
   }
 
   return (
@@ -52,7 +45,6 @@ export function OnboardingScreen({ onComplete }: Props) {
         {step === 'welcome' && (
           <WelcomeStep
             onSignIn={handleSignIn}
-            onSkip={handleSkip}
             loading={loading}
           />
         )}
@@ -67,11 +59,9 @@ export function OnboardingScreen({ onComplete }: Props) {
 // ─── Welcome Step ─────────────────────────────────────────
 function WelcomeStep({
   onSignIn,
-  onSkip,
   loading,
 }: {
   onSignIn: () => void
-  onSkip: () => void
   loading: boolean
 }) {
   return (
@@ -163,22 +153,7 @@ function WelcomeStep({
           )}
         </button>
 
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-white/5" />
-          <span className="text-slate-600 text-xs">or</span>
-          <div className="flex-1 h-px bg-white/5" />
-        </div>
-
-        <button
-          onClick={onSkip}
-          className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-surface-2 border border-white/10 transition-all"
-        >
-          Skip for now
-          <ArrowRight size={13} />
-        </button>
-
         <p className="text-slate-600 text-[11px] text-center leading-relaxed">
-          You can always sign in later from Settings.
           We never sell your data.
         </p>
       </div>

@@ -1,30 +1,20 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import "./App.css";
 import "./index.css";
 import { NewTabPage } from "./newtab/NewTabPage";
 import { useArcalistStore } from "./store/useArcalistStore";
 import { OnboardingScreen } from "./components/Onboarding/OnboardingScreen";
-import { isOnboarded } from "./lib/onboarding";
-
-type AppState = "checking" | "onboarding" | "app";
 
 function App() {
   const initialize = useArcalistStore((state) => state.initialize);
-  const [appState, setAppState] = useState<AppState>("checking");
+  const user = useArcalistStore((state) => state.user);
+  const hydrated = useArcalistStore((state) => state.hydrated);
+  const authReady = useArcalistStore((state) => state.authReady);
 
   useEffect(() => {
     const boot = async () => {
       // Always initialize the store first
       await initialize();
-
-      // Then check if user has been onboarded
-      const onboarded = await isOnboarded();
-
-      if (onboarded) {
-        setAppState("app");
-      } else {
-        setAppState("onboarding");
-      }
     };
 
     boot();
@@ -51,7 +41,7 @@ function App() {
   }, [initialize]);
 
   // Full-screen spinner while we check storage
-  if (appState === "checking") {
+  if (!hydrated || !authReady) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -62,8 +52,8 @@ function App() {
     );
   }
 
-  if (appState === "onboarding") {
-    return <OnboardingScreen onComplete={() => setAppState("app")} />;
+  if (!user) {
+    return <OnboardingScreen onComplete={() => {}} />;
   }
 
   return <NewTabPage />;

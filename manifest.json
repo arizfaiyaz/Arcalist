@@ -19,7 +19,8 @@
     "tabs",
     "activeTab",
     "windows",
-    "identity"
+    "identity",
+    "alarms"
   ],
 
   "icons": {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, LogIn, Loader2 } from "lucide-react";
+import { Plus, LogIn, Loader2, Trash2 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useArcalistStore } from "../store/useArcalistStore";
 import type { Page } from "../types";
@@ -9,6 +9,7 @@ type Props = {
   activePageId: string;
   onPageChange: (id: string) => void;
   onAddPage: (title: string) => void;
+  onDeletePage: (id: string) => void;
 };
 
 export function PageNav({
@@ -16,6 +17,7 @@ export function PageNav({
   activePageId,
   onPageChange,
   onAddPage,
+  onDeletePage,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -47,19 +49,37 @@ export function PageNav({
       {pages.map((page) => {
         const isActive = page.id === activePageId;
         return (
-          <button
-            key={page.id}
-            onClick={() => onPageChange(page.id)}
-            className={cn(
-              "px-4 py-1.5 rounded-full text-sm font-medium",
-              "transition-all duration-150",
-              isActive
-                ? "bg-accent text-background font-semibold"
-                : "text-slate-400 hover:text-white hover:bg-surface-2",
+          <div key={page.id} className="flex items-center group">
+            <button
+              onClick={() => onPageChange(page.id)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-sm font-medium",
+                "transition-all duration-150",
+                isActive
+                  ? "bg-accent text-background font-semibold"
+                  : "text-slate-400 hover:text-white hover:bg-surface-2",
+              )}
+            >
+              {page.title}
+            </button>
+            {pages.length > 1 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeletePage(page.id);
+                }}
+                className={cn(
+                  "ml-1 w-5 h-5 rounded-md",
+                  "flex items-center justify-center",
+                  "text-slate-500 hover:text-red-400",
+                  "opacity-0 group-hover:opacity-100 transition-opacity",
+                )}
+                title="Delete page"
+              >
+                <Trash2 size={11} />
+              </button>
             )}
-          >
-            {page.title}
-          </button>
+          </div>
         );
       })}
 

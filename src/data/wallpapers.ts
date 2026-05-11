@@ -8,6 +8,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: null,
     isDark: true,
     accentColor: "#00d285",
+    tone: "dark",
   },
   {
     id: "eclipse",
@@ -15,6 +16,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/1.jpg",
     isDark: true,
     accentColor: "#FAD02C",
+    tone: "dark",
   },
   {
     id: "skyline",
@@ -22,6 +24,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/2.jpg",
     isDark: true,
     accentColor: "#00E5FF",
+    tone: "colorful",
   },
   {
     id: "heart-tree",
@@ -29,6 +32,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/3.jpg",
     isDark: true,
     accentColor: "#A06EE1",
+    tone: "colorful",
   },
 
   // ── Light wallpapers ─────────────────────────────────────
@@ -38,6 +42,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: null,
     isDark: false,
     accentColor: "#7C3AED",
+    tone: "light",
   },
   {
     id: "field-sunset",
@@ -45,6 +50,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/4.jpg",
     isDark: false,
     accentColor: "#FF5F6D",
+    tone: "colorful",
   },
   {
     id: "torii-gate",
@@ -52,6 +58,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/5.jpg",
     isDark: false,
     accentColor: "#D97706",
+    tone: "colorful",
   },
   {
     id: "pagoda",
@@ -59,6 +66,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/6.jpg",
     isDark: false,
     accentColor: "#FF9A00",
+    tone: "colorful",
   },
   {
     id: "studio-cat",
@@ -66,6 +74,7 @@ export const WALLPAPERS: WallpaperTheme[] = [
     url: "/wallpapers/7.jpg",
     isDark: false,
     accentColor: "#48BB78",
+    tone: "light",
   },
 ];
 

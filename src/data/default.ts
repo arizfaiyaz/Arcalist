@@ -10,10 +10,15 @@ export const defaultState: ArcalistState = {
   privacyMode: false, // persisted now
   updatedAt: Date.now(),
   settings: {
-    openInNewTab: false,
-    shortenTitles: true,
     compactMode: false,
+    groupTools: false,
+    smartTruncation: true,
+    visibilityThreshold: 10,
+    shortenTitles: true,
+    openInNewTab: false,
     showDescriptions: false,
+    autoCloseAfterSaveAllTabs: false,
+    defaultCaptureBoardId: null,
   },
   wallpaperTheme: DEFAULT_WALLPAPER,
   pages: [

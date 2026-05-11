@@ -4,6 +4,9 @@ export type Bookmark = {
   url: string
   favicon: string
   incognito?: boolean
+  description?: string
+  isTrashed?: boolean
+  chromeBookmarkId?: string
   createdAt: number  //timestamp
 }
 
@@ -12,6 +15,7 @@ export type Board = {
   title: string
   bookmarks: Bookmark[]
   order: number
+  chromeFolderId?: string
 }
 
 export type Page = {
@@ -27,13 +31,19 @@ export type TrashedBookmark = {
   fromBoardTitle: string
   fromPageTitle: string
   fromBoardId: string // used for restoring the bookmark to the correct board
+  fromPageId?: string
 }
 
 export type AppSettings = {
-  openInNewTab: boolean
-  shortenTitles: boolean
   compactMode: boolean
+  groupTools: boolean
+  smartTruncation: boolean
+  visibilityThreshold: number
+  shortenTitles: boolean
+  openInNewTab: boolean
   showDescriptions: boolean
+  autoCloseAfterSaveAllTabs: boolean
+  defaultCaptureBoardId: string | null
 }
 
 export type WallpaperTheme = {
@@ -42,6 +52,7 @@ export type WallpaperTheme = {
   url: string | null
   isDark: boolean
   accentColor: string
+  tone?: "light" | "dark" | "colorful"
 }
 
 export type ArcalistState = {

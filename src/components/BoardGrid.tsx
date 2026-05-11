@@ -21,6 +21,7 @@ import { BoardCard } from "./BoardCard";
 import { ArcalistDragOverlay } from "./dnd/DragOverlay";
 import { useArcalistStore } from "../store/useArcalistStore";
 import type { Page, Bookmark, Board } from "../types";
+import { cn } from "../lib/utils";
 
 //--------------------------
 
@@ -42,6 +43,7 @@ export function BoardGrid({
   const addBoard = useArcalistStore((state) => state.addBoard);
   const reorderBoards = useArcalistStore((state) => state.reorderBoards);
   const reorderBookmarks = useArcalistStore((state) => state.reorderBookmarks);
+  const compactMode = useArcalistStore((state) => state.settings.compactMode);
 
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -188,14 +190,14 @@ export function BoardGrid({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="p-6 flex-1 overflow-y-auto">
+      <div className={cn("flex-1 overflow-y-auto", compactMode ? "p-3" : "p-6")}>
         {/* SortableContext for board-level sorting */}
         <SortableContext items={boardIds} strategy={rectSortingStrategy}>
           <div
             style={{
               columnCount: "auto",
-              columnWidth: "220px",
-              columnGap: "16px",
+              columnWidth: compactMode ? "200px" : "220px",
+              columnGap: compactMode ? "10px" : "16px",
             }}
           >
             {page.boards.map((board) => (

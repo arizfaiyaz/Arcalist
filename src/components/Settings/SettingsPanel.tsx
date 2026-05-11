@@ -79,6 +79,13 @@ export function SettingsPanel({ open, onClose }: Props) {
 function GeneralSettings() {
   const settings = useArcalistStore((state) => state.settings);
   const updateSettings = useArcalistStore((state) => state.updateSettings);
+  const pages = useArcalistStore((state) => state.pages);
+  const boardOptions = pages.flatMap((page) =>
+    page.boards.map((board) => ({
+      id: board.id,
+      label: `${page.title} · ${board.title}`,
+    })),
+  );
 
   return (
     <div className="p-6">
@@ -90,6 +97,26 @@ function GeneralSettings() {
           description="Reduce spacing to show more bookmarks"
           value={settings.compactMode}
           onChange={(v) => updateSettings({ compactMode: v })}
+        />
+        <SettingsToggle
+          label="Group tools"
+          description="Collapse right-side utility buttons into a menu"
+          value={settings.groupTools}
+          onChange={(v) => updateSettings({ groupTools: v })}
+        />
+        <SettingsToggle
+          label="Smart truncation"
+          description='Hide long bookmark lists and show a "Show More" button'
+          value={settings.smartTruncation}
+          onChange={(v) => updateSettings({ smartTruncation: v })}
+        />
+        <SettingsNumber
+          label="Visibility threshold"
+          description="How many bookmarks show before truncating"
+          value={settings.visibilityThreshold}
+          min={1}
+          max={500}
+          onChange={(v) => updateSettings({ visibilityThreshold: v })}
         />
         <SettingsToggle
           label="Shorten long titles"
@@ -111,6 +138,28 @@ function GeneralSettings() {
           description="Display saved descriptions below bookmark titles"
           value={settings.showDescriptions}
           onChange={(v) => updateSettings({ showDescriptions: v })}
+        />
+        <SettingsToggle
+          label="Auto close tabs after Save All Tabs"
+          description="Automatically close tabs after saving them"
+          value={settings.autoCloseAfterSaveAllTabs}
+          onChange={(v) => updateSettings({ autoCloseAfterSaveAllTabs: v })}
+        />
+        <SettingsSelect
+          label="Default capture board"
+          description="Default destination for Quick Save"
+          value={settings.defaultCaptureBoardId ?? ""}
+          options={boardOptions}
+          onChange={(v) =>
+            updateSettings({
+              defaultCaptureBoardId: v.length > 0 ? v : null,
+            })
+          }
+        />
+        <SettingsLink
+          label="Shortcut management"
+          description="Open browser shortcut settings"
+          href="chrome://extensions/shortcuts"
         />
       </SettingsSection>
     </div>
@@ -269,6 +318,111 @@ function SettingsToggle({
           )}
         />
       </button>
+    </div>
+  );
+}
+
+function SettingsNumber({
+  label,
+  description,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex-1 pr-4">
+        <p className="text-white text-sm">{label}</p>
+        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+      </div>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className={cn(
+          "w-20 px-2 py-1 rounded-lg text-sm",
+          "bg-surface-2 text-white border border-white/10",
+          "outline-none focus:border-accent/40",
+        )}
+      />
+    </div>
+  );
+}
+
+function SettingsSelect({
+  label,
+  description,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  options: { id: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex-1 pr-4">
+        <p className="text-white text-sm">{label}</p>
+        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "px-2 py-1 rounded-lg text-sm",
+          "bg-surface-2 text-white border border-white/10",
+          "outline-none focus:border-accent/40",
+        )}
+      >
+        <option value="">Inbox / First Board</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function SettingsLink({
+  label,
+  description,
+  href,
+}: {
+  label: string;
+  description: string;
+  href: string;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex-1 pr-4">
+        <p className="text-white text-sm">{label}</p>
+        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+      </div>
+      <a
+        href={href}
+        className={cn(
+          "px-3 py-1.5 rounded-lg text-xs",
+          "bg-surface-2 text-slate-300 border border-white/10",
+          "hover:text-white hover:border-accent/30",
+        )}
+      >
+        Open
+      </a>
     </div>
   );
 }

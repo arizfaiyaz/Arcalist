@@ -8,6 +8,19 @@
     --color-surface-2: #2a2f3a;
     --color-accent: #00d285;
     --color-accent-hover: #00b871;
+    --text-primary: #e2e8f0;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --text-subtle: #94a3b8;
+    --glass-surface: #22262f;
+    --glass-surface-2: #2a2f3a;
+    --glass-surface-50: #22262f;
+    --glass-surface-80: #22262f;
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-border-strong: rgba(255, 255, 255, 0.16);
+    --glass-shadow: 0 18px 40px rgba(0, 0, 0, 0.4);
+    --wallpaper-overlay: none;
+    --glass-blur: 0px;
 
     /* Typography */
     --font-sans: "Inter", sans-serif;
@@ -22,7 +35,7 @@
 
     body {
         background-color: var(--color-background);
-        color: #e2e8f0;
+        color: var(--text-primary);
         font-family: var(--font-sans);
         min-height: 100vh;
     }
@@ -46,6 +59,87 @@
 .has-wallpaper .bg-surface,
 .has-wallpaper .bg-surface\/50,
 .has-wallpaper .bg-surface\/80 {
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+}
+
+.has-wallpaper body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: var(--wallpaper-overlay);
+    z-index: 0;
+}
+
+.has-wallpaper #root {
+    position: relative;
+    z-index: 1;
+}
+
+.has-wallpaper .bg-surface {
+    background: var(--glass-surface);
+    box-shadow: var(--glass-shadow);
+    border-color: var(--glass-border);
+}
+
+.has-wallpaper .bg-surface-2 {
+    background: var(--glass-surface-2);
+    border-color: var(--glass-border);
+}
+
+.has-wallpaper .bg-surface\/50 {
+    background: var(--glass-surface-50);
+    border-color: var(--glass-border);
+}
+
+.has-wallpaper .bg-surface\/80 {
+    background: var(--glass-surface-80);
+    border-color: var(--glass-border);
+}
+
+.has-wallpaper .border-white\/5 {
+    border-color: var(--glass-border);
+}
+
+.has-wallpaper .border-white\/10,
+.has-wallpaper .border-white\/20 {
+    border-color: var(--glass-border-strong);
+}
+
+.light .text-white,
+.light .text-slate-200,
+.light .text-slate-300,
+.light .text-slate-700 {
+    color: var(--text-primary);
+}
+
+.light .text-slate-400 {
+    color: var(--text-secondary);
+}
+
+.light .text-slate-500,
+.light .text-slate-600 {
+    color: var(--text-muted);
+}
+
+.light .border-white\/5 {
+    border-color: var(--glass-border);
+}
+
+.light .border-white\/10,
+.light .border-white\/20 {
+    border-color: var(--glass-border-strong);
+}
+
+.light ::-webkit-scrollbar-track {
+    background: #e6e9ef;
+}
+
+.light ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+}
+
+.light ::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
