@@ -8,7 +8,7 @@ type Props = {
   pages: Page[];
   activePageId: string;
   onPageChange: (id: string) => void;
-  onAddPage: (title: string) => void;
+  onAddPage: (title: string) => boolean;
   onDeletePage: (id: string) => void;
 };
 
@@ -25,8 +25,14 @@ export function PageNav({
   const user = useArcalistStore((state) => state.user);
   const signInWithGoogle = useArcalistStore((state) => state.signInWithGoogle);
   const signingIn = useArcalistStore((state) => state.signingIn);
+  const canAddPage = useArcalistStore((state) => state.canCreatePage());
 
   const handleAdd = () => {
+    if (!canAddPage) {
+      setNewTitle("");
+      setAdding(false);
+      return;
+    }
     const trimmed = newTitle.trim();
     if (trimmed) {
       onAddPage(trimmed);
@@ -107,15 +113,24 @@ export function PageNav({
           />
         ) : (
           <button
-            onClick={() => setAdding(true)}
+            onClick={() => {
+              if (!canAddPage) return;
+              setAdding(true);
+            }}
+            disabled={!canAddPage}
             className={cn(
               "w-7 h-7 rounded-full flex items-center justify-center",
               "text-slate-500 hover:text-white",
               "hover:bg-surface-2 transition-all duration-150",
               "border border-white/10 hover:border-white/20",
               "ml-1",
+              !canAddPage && "opacity-50 cursor-not-allowed hover:text-slate-500",
             )}
-            title="Add new page"
+            title={
+              canAddPage
+                ? "Add new page"
+                : "Free plan supports up to 3 pages."
+            }
           >
             <Plus size={14} />
           </button>
@@ -144,6 +159,11 @@ export function PageNav({
           )}
         </div>
       </div>
+      {!canAddPage && (
+        <p className="mt-2 text-xs text-amber-200/80">
+          Free plan supports up to 3 pages.
+        </p>
+      )}
     </nav>
   );
 }

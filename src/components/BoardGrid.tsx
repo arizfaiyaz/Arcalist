@@ -44,6 +44,9 @@ export function BoardGrid({
   const reorderBoards = useArcalistStore((state) => state.reorderBoards);
   const reorderBookmarks = useArcalistStore((state) => state.reorderBookmarks);
   const compactMode = useArcalistStore((state) => state.settings.compactMode);
+  const canAddBoard = useArcalistStore((state) =>
+    state.canCreateBoard(page.id),
+  );
 
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -64,6 +67,11 @@ export function BoardGrid({
   );
 
   const handleAdd = () => {
+    if (!canAddBoard) {
+      setNewTitle("");
+      setAdding(false);
+      return;
+    }
     const trimmed = newTitle.trim();
     if (trimmed) addBoard(page.id, trimmed);
     setNewTitle("");
@@ -173,11 +181,32 @@ export function BoardGrid({
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <p className="text-slate-500 text-sm">No boards yet</p>
         <button
-          onClick={() => setAdding(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-surface-2 text-slate-400 hover:text-white border border-white/10 hover:border-accent/30 transition-all duration-150 text-sm"
+          onClick={() => {
+            if (!canAddBoard) return;
+            setAdding(true);
+          }}
+          disabled={!canAddBoard}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-lg",
+            "bg-surface-2 text-slate-400 border border-white/10",
+            "transition-all duration-150 text-sm",
+            canAddBoard
+              ? "hover:text-white hover:border-accent/30"
+              : "opacity-50 cursor-not-allowed",
+          )}
+          title={
+            canAddBoard
+              ? "Add your first board"
+              : "Free plan supports up to 10 boards per page."
+          }
         >
           <Plus size={14} /> Add your first board
         </button>
+        {!canAddBoard && (
+          <p className="text-xs text-amber-200/80">
+            Free plan supports up to 10 boards per page.
+          </p>
+        )}
       </div>
     );
   }
@@ -243,11 +272,30 @@ export function BoardGrid({
 
         {!adding && (
           <button
-            onClick={() => setAdding(true)}
-            className="flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-slate-500 hover:text-white text-sm hover:bg-surface-2 transition-all duration-150"
+            onClick={() => {
+              if (!canAddBoard) return;
+              setAdding(true);
+            }}
+            disabled={!canAddBoard}
+            className={cn(
+              "flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-sm",
+              canAddBoard
+                ? "text-slate-500 hover:text-white hover:bg-surface-2 transition-all duration-150"
+                : "text-slate-500 opacity-50 cursor-not-allowed",
+            )}
+            title={
+              canAddBoard
+                ? "Add board"
+                : "Free plan supports up to 10 boards per page."
+            }
           >
             <Plus size={14} /> Add board
           </button>
+        )}
+        {!canAddBoard && (
+          <p className="mt-2 text-xs text-amber-200/80">
+            Free plan supports up to 10 boards per page.
+          </p>
         )}
       </div>
 

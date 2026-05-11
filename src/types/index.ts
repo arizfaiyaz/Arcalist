@@ -25,6 +25,12 @@ export type Page = {
   order: number
 }
 
+export type OverflowBoard = {
+  board: Board
+  fromPageId?: string
+  fromPageTitle?: string
+}
+
 export type TrashedBookmark = {
   bookmark: Bookmark
   deletedAt: number  //timestamp
@@ -63,4 +69,5 @@ export type ArcalistState = {
   updatedAt: number
   settings: AppSettings
   wallpaperTheme: WallpaperTheme
+  overflowBoards?: OverflowBoard[]
 }

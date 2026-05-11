@@ -9,6 +9,11 @@ import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
 import { DEFAULT_WALLPAPER } from "../data/wallpapers";
 import { applyTheme } from "../lib/theme";
+import {
+  canCreateBoard,
+  canCreatePage,
+  normalizeBoardsForFreeTier,
+} from "../lib/freeTier";
 import type {
   ArcalistState,
   AppSettings,
@@ -56,14 +61,20 @@ type ArcalistStore = ArcalistState & {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 
+  // Free tier helpers
+  canCreatePage: () => boolean;
+  canCreateBoard: (pageId: string) => boolean;
+  getVisiblePages: () => Page[];
+  getOverflowBoards: () => ArcalistState["overflowBoards"];
+
   // Page actions
   setActivePage: (pageId: string) => void;
-  addPage: (title: string) => void;
+  addPage: (title: string) => boolean;
   deletePage: (pageId: string) => void;
   renamePage: (pageId: string, title: string) => void;
 
   // Board actions
-  addBoard: (pageId: string, title: string) => void;
+  addBoard: (pageId: string, title: string) => boolean;
   deleteBoard: (pageId: string, boardId: string) => void;
   renameBoard: (pageId: string, boardId: string, title: string) => void;
   reorderBoards: (pageId: string, oldIndex: number, newIndex: number) => void;
@@ -129,6 +140,16 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     fromBoardId: board.id,
     fromPageId: page.id,
   });
+
+  const normalizeState = (state: ArcalistState): ArcalistState => {
+    const merged: ArcalistState = {
+      ...state,
+      trash: state.trash ?? [],
+      settings: { ...defaultState.settings, ...state.settings },
+      overflowBoards: state.overflowBoards ?? [],
+    };
+    return normalizeBoardsForFreeTier(merged);
+  };
 
   const canUseChromeBookmarks = () =>
     typeof chrome !== "undefined" && !!chrome.bookmarks;
@@ -277,6 +298,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     pages: [],
     activePageId: "",
     trash: [],
+    overflowBoards: [],
     privacyMode: false,
     updatedAt: 0,
     settings: defaultState.settings,
@@ -293,17 +315,18 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       // 1. Load local state first (instant)
       const local = await loadState();
       if (local) {
+        const normalized = normalizeState(local);
         set({
-          ...local,
-          privacyMode: local.privacyMode ?? false,
-          trash: local.trash ?? [],
-          updatedAt: local.updatedAt ?? 0,
-          settings: { ...defaultState.settings, ...local.settings },
+          ...normalized,
           hydrated: true,
         });
-        if (local.wallpaperTheme) applyTheme(local.wallpaperTheme);
+        saveState(normalized);
+        if (normalized.wallpaperTheme) applyTheme(normalized.wallpaperTheme);
       } else {
-        const initial = { ...defaultState, updatedAt: Date.now() };
+        const initial = normalizeState({
+          ...defaultState,
+          updatedAt: Date.now(),
+        });
         set({ ...initial, hydrated: true });
         saveState(initial);
         applyTheme(initial.wallpaperTheme);
@@ -319,9 +342,17 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         const current = (await loadState()) ?? get();
         const imported = await importChromeBookmarks(current as ArcalistState);
         if (imported) {
-          set(imported);
-          if (imported.wallpaperTheme) {
-            applyTheme(imported.wallpaperTheme);
+          const normalized = normalizeState({
+            ...imported,
+            overflowBoards:
+              imported.overflowBoards ??
+              (current as ArcalistState).overflowBoards ??
+              [],
+          });
+          set(normalized);
+          saveState(normalized);
+          if (normalized.wallpaperTheme) {
+            applyTheme(normalized.wallpaperTheme);
           }
         }
       };
@@ -335,21 +366,24 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           if (remote) {
             // Remote exists — always use it on sign in
             // User's cloud data is the source of truth
-            const merged = {
+            const merged: ArcalistState = {
               ...remote,
               settings: { ...defaultState.settings, ...remote.settings },
-              user: session.user,
               privacyMode: false,
+              overflowBoards: remote.overflowBoards ?? [],
             };
-            set(merged);
-            saveState(merged);
+            const normalized = normalizeState(merged);
+            set({ ...normalized, user: session.user });
+            saveState(normalized);
             await maybeImportChrome();
           } else {
             // No remote data yet — first time signing in
             // Push current local state up to cloud
             const currentLocal = await loadState();
             if (currentLocal) {
-              await pushToCloud(session.user.id, currentLocal);
+              const normalized = normalizeState(currentLocal);
+              saveState(normalized);
+              await pushToCloud(session.user.id, normalized);
               set({ syncStatus: "synced" });
               setTimeout(() => set({ syncStatus: "idle" }), 2000);
             }
@@ -368,12 +402,14 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
             const winner = currentLocal
               ? resolveConflict(currentLocal, remote)
               : remote;
-            const merged = {
+            const merged: ArcalistState = {
               ...winner,
               settings: { ...defaultState.settings, ...winner.settings },
+              overflowBoards: winner.overflowBoards ?? [],
             };
-            set(merged);
-            saveState(merged);
+            const normalized = normalizeState(merged);
+            set(normalized);
+            saveState(normalized);
           }
         }
 
@@ -385,9 +421,11 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         if (syncChanged) {
           const syncedState = await loadState();
           if (syncedState) {
-            set(syncedState);
-            if (syncedState.wallpaperTheme) {
-              applyTheme(syncedState.wallpaperTheme);
+            const normalized = normalizeState(syncedState);
+            set(normalized);
+            saveState(normalized);
+            if (normalized.wallpaperTheme) {
+              applyTheme(normalized.wallpaperTheme);
             }
           }
         }
@@ -476,17 +514,21 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
             const winner = currentLocal
               ? resolveConflict(currentLocal, remote)
               : remote;
-            const merged = {
+            const merged: ArcalistState = {
               ...winner,
               settings: { ...defaultState.settings, ...winner.settings },
+              overflowBoards: winner.overflowBoards ?? [],
             };
-            set(merged);
-            saveState(merged);
+            const normalized = normalizeState(merged);
+            set(normalized);
+            saveState(normalized);
           } else {
             // First sign in — push local state up
             const currentLocal = await loadState();
             if (currentLocal) {
-              await pushToCloud(data.user.id, currentLocal);
+              const normalized = normalizeState(currentLocal);
+              saveState(normalized);
+              await pushToCloud(data.user.id, normalized);
             }
           }
         }
@@ -502,12 +544,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       set({ user: null, syncStatus: "idle" });
     },
 
+    // ─── Free Tier Helpers ─────────────────────────────────
+    canCreatePage: () => canCreatePage(get().pages),
+
+    canCreateBoard: (pageId) => {
+      const page = get().pages.find((p) => p.id === pageId);
+      return canCreateBoard(page);
+    },
+
+    getVisiblePages: () => get().pages,
+
+    getOverflowBoards: () => get().overflowBoards ?? [],
+
     // ─── Internal Helpers ─────────────────────────────────────
     _persist: () => {
       const {
         pages,
         activePageId,
         trash,
+        overflowBoards,
         privacyMode,
         settings,
         wallpaperTheme,
@@ -516,6 +571,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         pages,
         activePageId,
         trash,
+        overflowBoards,
         privacyMode,
         settings,
         wallpaperTheme,
@@ -536,6 +592,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         pages,
         activePageId,
         trash,
+        overflowBoards,
         privacyMode,
         settings,
         wallpaperTheme,
@@ -550,6 +607,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           pages,
           activePageId,
           trash,
+          overflowBoards,
           privacyMode,
           settings,
           wallpaperTheme,
@@ -592,6 +650,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     addPage: (title) => {
+      if (!canCreatePage(get().pages)) return false;
       const newPage: Page = {
         id: generateId(),
         title,
@@ -600,6 +659,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       };
       set((state) => ({ pages: [...state.pages, newPage] }));
       get()._persist();
+      return true;
     },
 
     deletePage: (pageId) => {
@@ -637,6 +697,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     // ─── Board Actions ────────────────────────────────────────
     addBoard: (pageId, title) => {
       const page = get().pages.find((p) => p.id === pageId);
+      if (!canCreateBoard(page)) return false;
       const newBoard: Board = {
         id: generateId(),
         title,
@@ -649,6 +710,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         ),
       }));
       get()._persist();
+      return true;
     },
 
     deleteBoard: (pageId, boardId) => {

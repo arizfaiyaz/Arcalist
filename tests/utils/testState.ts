@@ -29,6 +29,7 @@ export function createBaseState(overrides?: Partial<ArcalistState>): ArcalistSta
     ],
     activePageId: "page-1",
     trash: [],
+    overflowBoards: [],
     privacyMode: false,
     updatedAt: Date.now(),
     settings: {
