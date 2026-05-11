@@ -7,9 +7,16 @@ import { WALLPAPERS } from "../../data/wallpapers";
 type Props = {
   open: boolean;
   onClose: () => void;
+  layout?: "floating" | "rail";
+  className?: string;
 };
 
-export function WallpaperPanel({ open, onClose }: Props) {
+export function WallpaperPanel({
+  open,
+  onClose,
+  layout = "floating",
+  className,
+}: Props) {
   const wallpaper = useArcalistStore((state) => state.wallpaperTheme);
   const setWallpaper = useArcalistStore((state) => state.setWallpaper);
   const [styleTab, setStyleTab] = useState<"dark" | "light">(
@@ -22,12 +29,18 @@ export function WallpaperPanel({ open, onClose }: Props) {
     styleTab === "dark" ? w.isDark : !w.isDark,
   );
 
+  const positionClass =
+    layout === "rail"
+      ? "absolute bottom-16 left-0"
+      : "fixed bottom-16 z-50 workspace-edge-left";
+
   return (
     <div
       className={cn(
-        "fixed bottom-16 left-4 z-50",
+        positionClass,
         "w-80 bg-surface border border-white/10 rounded-2xl",
         "shadow-2xl shadow-black/60 overflow-hidden",
+        className,
       )}
     >
       {/* Header */}

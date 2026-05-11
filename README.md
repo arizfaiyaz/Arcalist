@@ -71,3 +71,18 @@ export default defineConfig([
   },
 ])
 ```
+
+  ## Release
+
+  Run the following commands before publishing:
+
+  ```bash
+  npm run build
+  npm run test
+  npm run test:e2e
+  ```
+
+  Notes:
+  - `npm run build` produces the MV3 extension build in `dist/`.
+  - `npm run test` runs unit, integration, and perf tests with Vitest.
+  - `npm run test:e2e` runs Playwright with a real Chromium extension context.

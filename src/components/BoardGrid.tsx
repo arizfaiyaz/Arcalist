@@ -190,14 +190,22 @@ export function BoardGrid({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className={cn("flex-1 overflow-y-auto", compactMode ? "p-3" : "p-6")}>
+      <div
+        className={cn(
+          "flex-1 w-full",
+          compactMode ? "py-3" : "py-6",
+          "pb-24",
+        )}
+      >
         {/* SortableContext for board-level sorting */}
         <SortableContext items={boardIds} strategy={rectSortingStrategy}>
           <div
             style={{
               columnCount: "auto",
-              columnWidth: compactMode ? "200px" : "220px",
-              columnGap: compactMode ? "10px" : "16px",
+              columnWidth: compactMode
+                ? "200px"
+                : "clamp(220px, 18vw, 300px)",
+              columnGap: compactMode ? "12px" : "clamp(12px, 1.8vw, 22px)",
             }}
           >
             {page.boards.map((board) => (

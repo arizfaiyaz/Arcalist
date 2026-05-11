@@ -85,38 +85,55 @@ export function NewTabPage() {
     <div
       className={
         wallpaperTheme.url
-          ? "min-h-screen flex flex-col"
-          : "min-h-screen bg-background flex flex-col"
+          ? "min-h-screen newtab-layout"
+          : "min-h-screen bg-background newtab-layout"
       }
     >
-      <PageNav
-        pages={pages}
-        activePageId={activePageId}
-        onPageChange={setActivePage}
-        onAddPage={addPage}
-        onDeletePage={deletePage}
-      />
+      <aside className="newtab-rail newtab-rail-left">
+        <div className="relative flex flex-col items-center gap-3">
+          <WallpaperButton
+            layout="rail"
+            onClick={() => setWallpaperOpen((v) => !v)}
+          />
+          <WallpaperPanel
+            open={wallpaperOpen}
+            onClose={() => setWallpaperOpen(false)}
+            layout="rail"
+          />
+        </div>
+      </aside>
 
-      <BoardGrid
-        page={activePage}
-        multiSelectMode={multiSelectMode}
-        selectedBookmarks={selectedBookmarks.map((b) => b.id)}
-        onBookmarkSelect={handleBookmarkSelect}
-      />
+      <main className="newtab-center">
+        <PageNav
+          pages={pages}
+          activePageId={activePageId}
+          onPageChange={setActivePage}
+          onAddPage={addPage}
+          onDeletePage={deletePage}
+        />
 
-      <ActionBar
-        onSearchOpen={() => setSearchOpen(true)}
-        onImportOpen={() => setImportOpen(true)}
-        onTrashOpen={() => setTrashOpen(true)}
-        onSettingsOpen={() => setSettingsOpen(true)}
-        onMultiSelectToggle={() => {
-          setMultiSelectMode((v) => !v);
-          setSelectedBookmarks([]);
-        }}
-        multiSelectMode={multiSelectMode}
-      />
+        <BoardGrid
+          page={activePage}
+          multiSelectMode={multiSelectMode}
+          selectedBookmarks={selectedBookmarks.map((b) => b.id)}
+          onBookmarkSelect={handleBookmarkSelect}
+        />
+      </main>
 
-      <WallpaperButton onClick={() => setWallpaperOpen((v) => !v)} />
+      <aside className="newtab-rail newtab-rail-right">
+        <ActionBar
+          layout="rail"
+          onSearchOpen={() => setSearchOpen(true)}
+          onImportOpen={() => setImportOpen(true)}
+          onTrashOpen={() => setTrashOpen(true)}
+          onSettingsOpen={() => setSettingsOpen(true)}
+          onMultiSelectToggle={() => {
+            setMultiSelectMode((v) => !v);
+            setSelectedBookmarks([]);
+          }}
+          multiSelectMode={multiSelectMode}
+        />
+      </aside>
 
       <MultiSelectBar
         selectedCount={selectedBookmarks.length}
@@ -133,10 +150,6 @@ export function NewTabPage() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-      />
-      <WallpaperPanel
-        open={wallpaperOpen}
-        onClose={() => setWallpaperOpen(false)}
       />
     </div>
   );

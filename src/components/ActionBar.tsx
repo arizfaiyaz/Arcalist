@@ -19,6 +19,8 @@ type Props = {
   onSettingsOpen: () => void;
   onMultiSelectToggle: () => void;
   multiSelectMode: boolean;
+  layout?: "floating" | "rail";
+  className?: string;
 };
 
 export function ActionBar({
@@ -28,6 +30,8 @@ export function ActionBar({
   onSettingsOpen,
   onMultiSelectToggle,
   multiSelectMode,
+  layout = "floating",
+  className,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const privacyMode = useArcalistStore((state) => state.privacyMode);
@@ -73,8 +77,13 @@ export function ActionBar({
     },
   ];
 
+  const containerClass =
+    layout === "rail"
+      ? "flex flex-col gap-2"
+      : "fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-2";
+
   return (
-    <div className="fixed right-4 top-1/2 -translate-y-1/2 z-40 flex flex-col gap-2">
+    <div className={cn(containerClass, className)}>
       {groupTools ? (
         <div className="relative">
           <ActionButton
