@@ -20,19 +20,19 @@ export function SettingsPanel({ open, onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
 
       <div
         className={cn(
           "relative flex w-full max-w-2xl mx-4 h-[480px]",
-          "bg-surface border border-white/10 rounded-2xl",
+          "bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl",
           "shadow-2xl shadow-black/60 overflow-hidden",
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar */}
-        <div className="w-52 border-r border-white/5 p-3 flex flex-col gap-1">
-          <p className="text-white font-bold text-base px-3 py-2">Settings</p>
+        <div className="w-52 border-r border-[var(--arc-glass-border)] p-3 flex flex-col gap-1">
+          <p className="text-[var(--arc-text-primary)] font-bold text-base px-3 py-2">Settings</p>
 
           {[
             { id: "general" as Tab, label: "General", icon: Settings },
@@ -46,8 +46,8 @@ export function SettingsPanel({ open, onClose }: Props) {
                 "flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm",
                 "transition-all duration-150 text-left",
                 tab === id
-                  ? "bg-accent/15 text-accent"
-                  : "text-slate-400 hover:text-white hover:bg-surface-2",
+                  ? "bg-accent/15 text-[var(--arc-accent)]"
+                  : "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]",
               )}
             >
               <Icon size={15} />
@@ -61,7 +61,7 @@ export function SettingsPanel({ open, onClose }: Props) {
           {/* Close button */}
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 text-slate-500 hover:text-white"
+            className="absolute top-3 right-3 text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]"
           >
             <X size={15} />
           </button>
@@ -89,7 +89,7 @@ function GeneralSettings() {
 
   return (
     <div className="p-6">
-      <h2 className="text-white font-bold text-lg mb-6">General Settings</h2>
+      <h2 className="text-[var(--arc-text-primary)] font-bold text-lg mb-6">General Settings</h2>
 
       <SettingsSection title="Appearance">
         <SettingsToggle
@@ -174,7 +174,7 @@ function AccountSettings() {
 
   return (
     <div className="p-6">
-      <h2 className="text-white font-bold text-lg mb-6">Account</h2>
+      <h2 className="text-[var(--arc-text-primary)] font-bold text-lg mb-6">Account</h2>
 
       {user ? (
         <div className="flex flex-col gap-3">
@@ -239,7 +239,7 @@ function AccountSettings() {
 function SupportSettings() {
   return (
     <div className="p-6">
-      <h2 className="text-white font-bold text-lg mb-6">Support</h2>
+      <h2 className="text-[var(--arc-text-primary)] font-bold text-lg mb-6">Support</h2>
 
       <div className="bg-surface-2 rounded-xl p-4 flex flex-col gap-3">
         <div>

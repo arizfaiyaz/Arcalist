@@ -2,6 +2,8 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { Search, X, ArrowRight } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useArcalistStore } from '../../store/useArcalistStore'
+import { usePlanLimits } from '../../hooks/usePlanLimits'
+import { getVisiblePagesForPlan } from '../../lib/planLimits'
 import type { Bookmark } from '../../types'
 
 type SearchResult = {
@@ -17,7 +19,12 @@ type Props = {
 }
 
 export function SearchOverlay({ open, onClose }: Props) {
-  const pages = useArcalistStore((state) => state.pages)
+  const allPages = useArcalistStore((state) => state.pages)
+  const planLimits = usePlanLimits()
+  const pages = useMemo(
+    () => getVisiblePagesForPlan(allPages, planLimits),
+    [allPages, planLimits],
+  )
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -81,37 +88,37 @@ export function SearchOverlay({ open, onClose }: Props) {
       onClick={onClose}
     >
       {/* Blur backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
 
       {/* Search panel */}
       <div
         className={cn(
           'relative w-full max-w-xl mx-4',
-          'bg-surface border border-white/10 rounded-2xl',
+          'bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl',
           'shadow-2xl shadow-black/60',
           'overflow-hidden'
         )}
         onClick={(e) => e.stopPropagation()} // prevent closing when clicking inside
       >
         {/* Input row */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
-          <Search size={16} className="text-slate-400 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--arc-glass-border)]">
+          <Search size={16} className="text-[var(--arc-text-secondary)] shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search bookmarks, boards, pages..."
             className={cn(
-              'flex-1 bg-transparent text-white text-sm',
-              'outline-none placeholder:text-slate-500'
+              'flex-1 bg-transparent text-[var(--arc-text-primary)] text-sm',
+              'outline-none placeholder:text-[var(--arc-text-secondary)]'
             )}
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-slate-500 hover:text-white">
+            <button onClick={() => setQuery('')} className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]">
               <X size={14} />
             </button>
           )}
-          <kbd className="text-[10px] text-slate-500 bg-surface-2 px-1.5 py-0.5 rounded border border-white/10">
+          <kbd className="text-[10px] text-[var(--arc-text-secondary)] bg-[var(--arc-button-bg)] px-1.5 py-0.5 rounded border border-[var(--arc-glass-border)]">
             ESC
           </kbd>
         </div>
@@ -119,7 +126,7 @@ export function SearchOverlay({ open, onClose }: Props) {
         {/* Results */}
         <div className="max-h-80 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-8">
+            <p className="text-[var(--arc-text-secondary)] text-sm text-center py-8">
               No bookmarks found
             </p>
           ) : (
@@ -135,8 +142,8 @@ export function SearchOverlay({ open, onClose }: Props) {
         </div>
 
         {/* Footer hint */}
-        <div className="px-4 py-2 border-t border-white/5 flex items-center gap-4">
-          <span className="text-[10px] text-slate-600">
+        <div className="px-4 py-2 border-t border-[var(--arc-glass-border)] flex items-center gap-4">
+          <span className="text-[10px] text-[var(--arc-text-secondary)]">
             {allResults.length} bookmarks across {pages.length} pages
           </span>
         </div>
@@ -168,7 +175,7 @@ function SearchResult({
       onClick={handleClick}
       className={cn(
         'w-full flex items-center gap-3 px-4 py-2.5',
-        'hover:bg-surface-2 transition-colors duration-100',
+        'hover:bg-[var(--arc-button-bg)] transition-colors duration-100',
         'text-left group'
       )}
     >
@@ -181,8 +188,8 @@ function SearchResult({
           onError={() => setImgError(true)}
         />
       ) : (
-        <div className="w-4 h-4 rounded-sm bg-surface-2 flex items-center justify-center shrink-0">
-          <span className="text-[8px] text-slate-400 font-bold uppercase">
+        <div className="w-4 h-4 rounded-sm bg-[var(--arc-button-bg)] flex items-center justify-center shrink-0">
+          <span className="text-[8px] text-[var(--arc-text-secondary)] font-bold uppercase">
             {bookmark.title.charAt(0)}
           </span>
         </div>
@@ -190,17 +197,17 @@ function SearchResult({
 
       {/* Title + breadcrumb */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-200 truncate">
+        <p className="text-sm text-[var(--arc-text-primary)] truncate">
           <Highlight text={bookmark.title} query={query} />
         </p>
-        <p className="text-[10px] text-slate-500 truncate mt-0.5">
+        <p className="text-[10px] text-[var(--arc-text-secondary)] truncate mt-0.5">
           {pageTitle} · {boardTitle}
         </p>
       </div>
 
       <ArrowRight
         size={12}
-        className="text-slate-600 group-hover:text-accent transition-colors shrink-0"
+        className="text-[var(--arc-text-secondary)] group-hover:text-[var(--arc-accent)] transition-colors shrink-0"
       />
     </button>
   )
@@ -216,7 +223,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
   return (
     <>
       {text.slice(0, index)}
-      <span className="text-accent font-medium">
+      <span className="text-[var(--arc-accent)] font-medium">
         {text.slice(index, index + query.length)}
       </span>
       {text.slice(index + query.length)}

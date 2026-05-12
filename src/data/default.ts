@@ -11,6 +11,8 @@ export const defaultState: ArcalistState = {
   privacyMode: false, // persisted now
   updatedAt: Date.now(),
   settings: {
+    selectedThemeId: "default-dark",
+    customWallpapers: [],
     compactMode: false,
     groupTools: false,
     smartTruncation: true,

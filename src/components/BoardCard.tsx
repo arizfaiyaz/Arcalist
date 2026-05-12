@@ -103,10 +103,11 @@ export function BoardCard({
       ref={setRef}
       style={style}
       className={cn(
-        "bg-surface rounded-xl h-fit",
+        "bg-[var(--arc-glass-bg)] rounded-xl h-fit",
         compactMode ? "p-2" : "p-3",
-        "border border-white/5 transition-colors duration-200",
-        "hover:border-white/10",
+        "border border-[var(--arc-glass-border)] transition-colors duration-200",
+        "shadow-[var(--arc-glass-shadow)] backdrop-blur-[var(--arc-glass-blur)]",
+        "hover:border-[var(--arc-glass-border)]",
         // Highlight when a bookmark is dragged over this board
         isOver && "border-accent/40 bg-accent/5",
       )}
@@ -120,7 +121,7 @@ export function BoardCard({
             {...listeners}
             className={cn(
               "opacity-0 group-hover:opacity-100 transition-opacity",
-              "text-slate-600 hover:text-slate-400",
+              "text-[var(--arc-text-secondary)] opacity-60 hover:opacity-100",
               "cursor-grab active:cursor-grabbing touch-none",
             )}
           >
@@ -128,7 +129,7 @@ export function BoardCard({
           </button>
           <h3
             className={cn(
-              "text-xs font-semibold text-slate-400 uppercase tracking-wider",
+              "text-xs font-semibold text-[var(--arc-text-secondary)] uppercase tracking-wider",
               "transition-all duration-200 select-none",
               privacyMode && "blur-sm",
             )}
@@ -140,20 +141,20 @@ export function BoardCard({
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => setAdding(true)}
-            className="w-5 h-5 rounded-md flex items-center justify-center text-slate-500 hover:text-accent hover:bg-surface-2"
+            className="w-5 h-5 rounded-md flex items-center justify-center text-[var(--arc-text-secondary)] hover:text-[var(--arc-accent)] hover:bg-[var(--arc-button-bg)]"
           >
             <Plus size={12} />
           </button>
           <button
             onClick={() => deleteBoard(pageId, board.id)}
-            className="w-5 h-5 rounded-md flex items-center justify-center text-slate-500 hover:text-red-400 hover:bg-surface-2"
+            className="w-5 h-5 rounded-md flex items-center justify-center text-[var(--arc-text-secondary)] hover:text-red-400 hover:bg-[var(--arc-button-bg)]"
           >
             <Trash2 size={12} />
           </button>
         </div>
       </div>
 
-      <div className="h-px bg-white/5 mb-1" />
+      <div className="h-px bg-[var(--arc-glass-border)] mb-1" />
 
       {/* Sortable bookmark list */}
       <SortableContext
@@ -178,7 +179,7 @@ export function BoardCard({
         <button
           onClick={() => setShowAll((v) => !v)}
           className={cn(
-            "mt-2 w-full text-xs text-slate-500 hover:text-white",
+            "mt-2 w-full text-xs text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
             "transition-colors text-left",
           )}
         >
@@ -202,8 +203,8 @@ export function BoardCard({
           placeholder="Paste URL..."
           className={cn(
             "w-full mt-2 px-2.5 py-1.5 rounded-lg text-sm",
-            "bg-surface-2 text-white border border-accent/30",
-            "outline-none placeholder:text-slate-500",
+            "bg-[var(--arc-button-bg)] text-[var(--arc-text-primary)] border border-[var(--arc-accent)]",
+            "outline-none placeholder:text-[var(--arc-text-secondary)]",
           )}
         />
       )}

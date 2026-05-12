@@ -1,7 +1,9 @@
-import { useState, useRef } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { Upload, X, Check, FileText } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useArcalistStore } from '../../store/useArcalistStore'
+import { usePlanLimits } from '../../hooks/usePlanLimits'
+import { getVisiblePagesForPlan } from '../../lib/planLimits'
 
 type ParsedBookmark = {
   title: string
@@ -15,8 +17,13 @@ type Props = {
 }
 
 export function ImportDialog({ open, onClose }: Props) {
-  const pages = useArcalistStore((state) => state.pages)
+  const allPages = useArcalistStore((state) => state.pages)
   const addBookmark = useArcalistStore((state) => state.addBookmark)
+  const planLimits = usePlanLimits()
+  const pages = useMemo(
+    () => getVisiblePagesForPlan(allPages, planLimits),
+    [allPages, planLimits],
+  )
 
   const [parsed, setParsed] = useState<ParsedBookmark[]>([])
   const [targetBoardId, setTargetBoardId] = useState('')
@@ -98,20 +105,20 @@ export function ImportDialog({ open, onClose }: Props) {
       className="fixed inset-0 z-50 flex items-center justify-center"
       onClick={handleClose}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
 
       <div
         className={cn(
           'relative w-full max-w-md mx-4',
-          'bg-surface border border-white/10 rounded-2xl',
+          'bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl',
           'shadow-2xl shadow-black/60 p-6'
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-white font-semibold">Import Bookmarks</h2>
-          <button onClick={handleClose} className="text-slate-500 hover:text-white">
+          <h2 className="text-[var(--arc-text-primary)] font-semibold">Import Bookmarks</h2>
+          <button onClick={handleClose} className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]">
             <X size={16} />
           </button>
         </div>
@@ -119,7 +126,7 @@ export function ImportDialog({ open, onClose }: Props) {
         {/* Step 1 — Upload */}
         {step === 'upload' && (
           <div>
-            <p className="text-slate-400 text-sm mb-4">
+            <p className="text-[var(--arc-text-secondary)] text-sm mb-4">
               Export your Chrome bookmarks as an HTML file, then upload it here.
               <br />
               <span className="text-slate-500 text-xs mt-1 block">
@@ -160,10 +167,10 @@ export function ImportDialog({ open, onClose }: Props) {
         {step === 'confirm' && (
           <div>
             {/* Summary */}
-            <div className="flex items-center gap-3 bg-surface-2 rounded-xl p-3 mb-4">
-              <FileText size={16} className="text-accent shrink-0" />
+            <div className="flex items-center gap-3 bg-[var(--arc-button-bg)] rounded-xl p-3 mb-4">
+              <FileText size={16} className="text-[var(--arc-accent)] shrink-0" />
               <div>
-                <p className="text-white text-sm font-medium">
+                <p className="text-[var(--arc-text-primary)] text-sm font-medium">
                   {parsed.length} bookmarks found
                 </p>
                 <p className="text-slate-500 text-xs">Ready to import</p>
@@ -194,9 +201,9 @@ export function ImportDialog({ open, onClose }: Props) {
                 value={targetBoardId}
                 onChange={(e) => setTargetBoardId(e.target.value)}
                 className={cn(
-                  'w-full bg-surface-2 text-white text-sm',
-                  'border border-white/10 rounded-lg px-3 py-2',
-                  'outline-none focus:border-accent/50'
+                  'w-full bg-[var(--arc-button-bg)] text-[var(--arc-text-primary)] text-sm',
+                  'border border-[var(--arc-glass-border)] rounded-lg px-3 py-2',
+                  'outline-none focus:border-[var(--arc-accent)]'
                 )}
               >
                 {allBoards.map((b) => (

@@ -31,6 +31,20 @@
         --workspace-max: 2100px;
         --workspace-gutter: clamp(12px, 2.5vw, 36px);
         --workspace-gutter-tight: clamp(10px, 2vw, 24px);
+        --arc-wallpaper: none;
+        --arc-accent: var(--color-accent);
+        --arc-accent-foreground: #0f172a;
+        --arc-glass-bg: var(--color-surface);
+        --arc-glass-border: var(--glass-border);
+        --arc-glass-blur: var(--glass-blur);
+        --arc-glass-shadow: var(--glass-shadow);
+        --arc-text-primary: var(--text-primary);
+        --arc-text-secondary: var(--text-secondary);
+        --arc-button-bg: var(--color-surface-2);
+        --arc-button-text: var(--text-primary);
+        --arc-nav-bg: var(--color-surface);
+        --arc-modal-bg: var(--color-surface);
+        --arc-overlay: var(--wallpaper-overlay);
     }
 
     * {
@@ -41,6 +55,10 @@
 
     body {
         background-color: var(--color-background);
+        background-image: var(--arc-wallpaper, none);
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
         color: var(--text-primary);
         font-family: var(--font-sans);
         min-height: 100vh;
@@ -94,6 +112,11 @@
 .newtab-center {
     grid-column: 2;
     width: 100%;
+}
+
+.newtab-workspace {
+    width: min(100%, 1400px);
+    margin-inline: auto;
     padding-inline: clamp(16px, 2vw, 28px);
 }
 
@@ -117,6 +140,37 @@
     grid-column: 3;
 }
 
+.arc-wallpaper-bg {
+    background-image: var(--arc-wallpaper);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.arc-glass {
+    background: var(--arc-glass-bg);
+    border: 1px solid var(--arc-glass-border);
+    backdrop-filter: blur(var(--arc-glass-blur));
+    -webkit-backdrop-filter: blur(var(--arc-glass-blur));
+    box-shadow: var(--arc-glass-shadow);
+}
+
+.arc-text-primary {
+    color: var(--arc-text-primary);
+}
+
+.arc-text-secondary {
+    color: var(--arc-text-secondary);
+}
+
+.arc-accent-bg {
+    background: var(--arc-accent);
+}
+
+.arc-accent-text {
+    color: var(--arc-accent);
+}
+
 @media (max-width: 1024px) {
     .newtab-layout {
         grid-template-columns: 1fr;
@@ -124,7 +178,6 @@
 
     .newtab-center {
         grid-column: 1;
-        padding-inline: 16px;
     }
 
     .newtab-rail {
@@ -169,24 +222,24 @@
 }
 
 .has-wallpaper .bg-surface {
-    background: var(--glass-surface);
+    background: var(--arc-glass-bg);
     box-shadow: var(--glass-shadow);
-    border-color: var(--glass-border);
+    border-color: var(--arc-glass-border);
 }
 
 .has-wallpaper .bg-surface-2 {
-    background: var(--glass-surface-2);
-    border-color: var(--glass-border);
+    background: var(--arc-button-bg);
+    border-color: var(--arc-glass-border);
 }
 
 .has-wallpaper .bg-surface\/50 {
-    background: var(--glass-surface-50);
-    border-color: var(--glass-border);
+    background: var(--arc-modal-bg);
+    border-color: var(--arc-glass-border);
 }
 
 .has-wallpaper .bg-surface\/80 {
-    background: var(--glass-surface-80);
-    border-color: var(--glass-border);
+    background: var(--arc-nav-bg);
+    border-color: var(--arc-glass-border);
 }
 
 .has-wallpaper .border-white\/5 {

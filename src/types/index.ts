@@ -41,6 +41,8 @@ export type TrashedBookmark = {
 }
 
 export type AppSettings = {
+  selectedThemeId: string
+  customWallpapers: CustomWallpaper[]
   compactMode: boolean
   groupTools: boolean
   smartTruncation: boolean
@@ -50,6 +52,19 @@ export type AppSettings = {
   showDescriptions: boolean
   autoCloseAfterSaveAllTabs: boolean
   defaultCaptureBoardId: string | null
+}
+
+export type CustomWallpaper = {
+  id: string
+  userId: string
+  name: string
+  storagePath: string
+  publicUrl: string
+  createdAt: string
+  mode: "dark" | "light"
+  accentColor: string
+  glassBackground?: string
+  glassBorder?: string
 }
 
 export type WallpaperTheme = {

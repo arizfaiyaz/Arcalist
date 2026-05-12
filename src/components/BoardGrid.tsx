@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import {
   DndContext,
   type DragStartEvent,
@@ -30,6 +30,8 @@ type Props = {
   multiSelectMode?: boolean;
   selectedBookmarks?: string[];
   onBookmarkSelect?: (bookmarkId: string, boardId: string) => void;
+  lockedBoardCount?: number;
+  onBoardLimitReached?: () => void;
 };
 
 //-------------------------
@@ -39,6 +41,8 @@ export function BoardGrid({
   multiSelectMode = false,
   selectedBookmarks = [],
   onBookmarkSelect,
+  lockedBoardCount = 0,
+  onBoardLimitReached,
 }: Props) {
   const addBoard = useArcalistStore((state) => state.addBoard);
   const reorderBoards = useArcalistStore((state) => state.reorderBoards);
@@ -70,6 +74,7 @@ export function BoardGrid({
     if (!canAddBoard) {
       setNewTitle("");
       setAdding(false);
+      onBoardLimitReached?.();
       return;
     }
     const trimmed = newTitle.trim();
@@ -182,17 +187,19 @@ export function BoardGrid({
         <p className="text-slate-500 text-sm">No boards yet</p>
         <button
           onClick={() => {
-            if (!canAddBoard) return;
+            if (!canAddBoard) {
+              onBoardLimitReached?.();
+              return;
+            }
             setAdding(true);
           }}
-          disabled={!canAddBoard}
           className={cn(
             "flex items-center gap-2 px-4 py-2 rounded-lg",
             "bg-surface-2 text-slate-400 border border-white/10",
             "transition-all duration-150 text-sm",
             canAddBoard
               ? "hover:text-white hover:border-accent/30"
-              : "opacity-50 cursor-not-allowed",
+              : "border-amber-300/25 text-amber-100/80 hover:border-amber-300/35 hover:text-amber-100",
           )}
           title={
             canAddBoard
@@ -202,11 +209,6 @@ export function BoardGrid({
         >
           <Plus size={14} /> Add your first board
         </button>
-        {!canAddBoard && (
-          <p className="text-xs text-amber-200/80">
-            Free plan supports up to 10 boards per page.
-          </p>
-        )}
       </div>
     );
   }
@@ -226,77 +228,89 @@ export function BoardGrid({
           "pb-24",
         )}
       >
-        {/* SortableContext for board-level sorting */}
-        <SortableContext items={boardIds} strategy={rectSortingStrategy}>
-          <div
-            style={{
-              columnCount: "auto",
-              columnWidth: compactMode
-                ? "200px"
-                : "clamp(220px, 18vw, 300px)",
-              columnGap: compactMode ? "12px" : "clamp(12px, 1.8vw, 22px)",
-            }}
-          >
-            {page.boards.map((board) => (
-              <div key={board.id} className="break-inside-avoid mb-4">
-                <BoardCard
-                  board={board}
-                  pageId={page.id}
-                  multiSelectMode={multiSelectMode}
-                  selectedBookmarks={selectedBookmarks}
-                  onBookmarkSelect={onBookmarkSelect}
-                />
-              </div>
-            ))}
+        <div className="w-full text-center">
+          <div className="inline-block text-left align-top max-w-full">
+            {/* SortableContext for board-level sorting */}
+            <SortableContext items={boardIds} strategy={rectSortingStrategy}>
+              <div
+                style={{
+                  columnCount: "auto",
+                  columnWidth: compactMode
+                    ? "200px"
+                    : "clamp(220px, 18vw, 300px)",
+                  columnGap: compactMode
+                    ? "12px"
+                    : "clamp(12px, 1.8vw, 22px)",
+                }}
+              >
+                {page.boards.map((board) => (
+                  <div key={board.id} className="break-inside-avoid mb-4">
+                    <BoardCard
+                      board={board}
+                      pageId={page.id}
+                      multiSelectMode={multiSelectMode}
+                      selectedBookmarks={selectedBookmarks}
+                      onBookmarkSelect={onBookmarkSelect}
+                    />
+                  </div>
+                ))}
 
-            {adding && (
-              <div className="break-inside-avoid mb-4">
-                <div className="bg-surface rounded-xl p-3 border border-accent/30">
-                  <input
-                    autoFocus
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleAdd();
-                      if (e.key === "Escape") setAdding(false);
-                    }}
-                    onBlur={handleAdd}
-                    placeholder="Board name..."
-                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500 px-1"
-                  />
-                </div>
+                {lockedBoardCount > 0 && (
+                  <div className="break-inside-avoid mb-4">
+                    <LockedBoardCard
+                      count={lockedBoardCount}
+                      onUpgrade={onBoardLimitReached}
+                    />
+                  </div>
+                )}
+
+                {adding && (
+                  <div className="break-inside-avoid mb-4">
+                    <div className="bg-surface rounded-xl p-3 border border-accent/30">
+                      <input
+                        autoFocus
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAdd();
+                          if (e.key === "Escape") setAdding(false);
+                        }}
+                        onBlur={handleAdd}
+                        placeholder="Board name..."
+                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500 px-1"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
+            </SortableContext>
+
+            {!adding && (
+              <button
+                onClick={() => {
+                  if (!canAddBoard) {
+                    onBoardLimitReached?.();
+                    return;
+                  }
+                  setAdding(true);
+                }}
+                className={cn(
+                  "flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-sm",
+                  canAddBoard
+                    ? "text-slate-500 hover:text-white hover:bg-surface-2 transition-all duration-150"
+                    : "text-amber-100/70 hover:text-amber-100 hover:bg-amber-500/10",
+                )}
+                title={
+                  canAddBoard
+                    ? "Add board"
+                    : "Free plan supports up to 10 boards per page."
+                }
+              >
+                <Plus size={14} /> Add board
+              </button>
             )}
           </div>
-        </SortableContext>
-
-        {!adding && (
-          <button
-            onClick={() => {
-              if (!canAddBoard) return;
-              setAdding(true);
-            }}
-            disabled={!canAddBoard}
-            className={cn(
-              "flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-sm",
-              canAddBoard
-                ? "text-slate-500 hover:text-white hover:bg-surface-2 transition-all duration-150"
-                : "text-slate-500 opacity-50 cursor-not-allowed",
-            )}
-            title={
-              canAddBoard
-                ? "Add board"
-                : "Free plan supports up to 10 boards per page."
-            }
-          >
-            <Plus size={14} /> Add board
-          </button>
-        )}
-        {!canAddBoard && (
-          <p className="mt-2 text-xs text-amber-200/80">
-            Free plan supports up to 10 boards per page.
-          </p>
-        )}
+        </div>
       </div>
 
       {/* The floating ghost element while dragging */}
@@ -305,5 +319,34 @@ export function BoardGrid({
         activeBoard={activeBoard}
       />
     </DndContext>
+  );
+}
+
+function LockedBoardCard({
+  count,
+  onUpgrade,
+}: {
+  count: number;
+  onUpgrade?: () => void;
+}) {
+  return (
+    <button
+      onClick={onUpgrade}
+      className={cn(
+        "w-full rounded-xl border border-amber-300/25 bg-amber-500/10",
+        "p-4 text-left text-amber-100/80 shadow-lg shadow-black/10",
+        "hover:bg-amber-500/15 hover:text-amber-100 transition-colors",
+      )}
+    >
+      <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/25 bg-amber-300/10">
+        <Lock size={15} />
+      </div>
+      <p className="text-sm font-semibold text-amber-100">
+        {count} extra {count === 1 ? "board" : "boards"} saved
+      </p>
+      <p className="mt-1 text-xs leading-5 text-amber-100/70">
+        Upgrade to Pro to unlock them.
+      </p>
+    </button>
   );
 }

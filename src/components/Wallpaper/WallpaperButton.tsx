@@ -23,9 +23,9 @@ export function WallpaperButton({
       title="Style and wallpaper"
       className={cn(
         baseClass,
-        "bg-surface/80 border border-white/10",
-        "text-slate-400 hover:text-white",
-        "hover:border-accent/30 backdrop-blur-sm",
+        "bg-[var(--arc-nav-bg)] border border-[var(--arc-glass-border)]",
+        "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
+        "hover:border-[var(--arc-accent)] backdrop-blur-sm",
         "transition-all duration-150 shadow-lg shadow-black/20",
         className,
       )}

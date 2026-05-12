@@ -7,13 +7,15 @@ import { importChromeBookmarks } from "../lib/importBookmarks";
 import { addMapping, getBookmarkMap, removeMapping } from "../lib/chromeBookmarkMap";
 import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
-import { DEFAULT_WALLPAPER } from "../data/wallpapers";
+import { DEFAULT_WALLPAPER, toWallpaperTheme } from "../data/wallpapers";
 import { applyTheme } from "../lib/theme";
+import { getEffectiveTheme, getThemeById } from "../config/themes";
+import { customWallpaperToTheme } from "../lib/customWallpapers";
 import {
-  canCreateBoard,
-  canCreatePage,
-  normalizeBoardsForFreeTier,
-} from "../lib/freeTier";
+  getUserPlanLimits,
+  getVisiblePagesForPlan,
+  normalizeWorkspaceState,
+} from "../lib/planLimits";
 import type {
   ArcalistState,
   AppSettings,
@@ -142,13 +144,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
   });
 
   const normalizeState = (state: ArcalistState): ArcalistState => {
+    const selectedThemeId =
+      state.settings?.selectedThemeId ?? state.wallpaperTheme?.id ?? "default-dark";
+    const customWallpapers = state.settings?.customWallpapers ?? [];
+    const customThemes = customWallpapers.map(customWallpaperToTheme);
     const merged: ArcalistState = {
       ...state,
       trash: state.trash ?? [],
-      settings: { ...defaultState.settings, ...state.settings },
+      settings: {
+        ...defaultState.settings,
+        ...state.settings,
+        selectedThemeId,
+        customWallpapers,
+      },
+      wallpaperTheme: toWallpaperTheme(
+        getThemeById(selectedThemeId, customThemes)?.id ?? "default-dark",
+      ),
       overflowBoards: state.overflowBoards ?? [],
     };
-    return normalizeBoardsForFreeTier(merged);
+    return normalizeWorkspaceState(merged);
   };
 
   const canUseChromeBookmarks = () =>
@@ -321,7 +335,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           hydrated: true,
         });
         saveState(normalized);
-        if (normalized.wallpaperTheme) applyTheme(normalized.wallpaperTheme);
+        applyTheme(
+          getEffectiveTheme(
+            normalized.settings.selectedThemeId,
+            false,
+            normalized.settings.customWallpapers.map(customWallpaperToTheme),
+          ),
+        );
       } else {
         const initial = normalizeState({
           ...defaultState,
@@ -329,7 +349,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         });
         set({ ...initial, hydrated: true });
         saveState(initial);
-        applyTheme(initial.wallpaperTheme);
+        applyTheme(
+          getEffectiveTheme(
+            initial.settings.selectedThemeId,
+            false,
+            initial.settings.customWallpapers.map(customWallpaperToTheme),
+          ),
+        );
       }
 
       // 2. Check for existing Supabase session (fast local read)
@@ -351,9 +377,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           });
           set(normalized);
           saveState(normalized);
-          if (normalized.wallpaperTheme) {
-            applyTheme(normalized.wallpaperTheme);
-          }
+          applyTheme(
+            getEffectiveTheme(
+              normalized.settings.selectedThemeId,
+              false,
+              normalized.settings.customWallpapers.map(customWallpaperToTheme),
+            ),
+          );
         }
       };
 
@@ -424,9 +454,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
             const normalized = normalizeState(syncedState);
             set(normalized);
             saveState(normalized);
-            if (normalized.wallpaperTheme) {
-              applyTheme(normalized.wallpaperTheme);
-            }
+            applyTheme(
+              getEffectiveTheme(
+                normalized.settings.selectedThemeId,
+                false,
+                normalized.settings.customWallpapers.map(customWallpaperToTheme),
+              ),
+            );
           }
         }
 
@@ -545,14 +579,21 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     // ─── Free Tier Helpers ─────────────────────────────────
-    canCreatePage: () => canCreatePage(get().pages),
+    canCreatePage: () => {
+      const limits = getUserPlanLimits(get().user);
+      return limits.canCreatePage(get().pages.length);
+    },
 
     canCreateBoard: (pageId) => {
       const page = get().pages.find((p) => p.id === pageId);
-      return canCreateBoard(page);
+      const limits = getUserPlanLimits(get().user);
+      return limits.canCreateBoard(page?.boards?.length ?? 0);
     },
 
-    getVisiblePages: () => get().pages,
+    getVisiblePages: () => {
+      const limits = getUserPlanLimits(get().user);
+      return getVisiblePagesForPlan(get().pages, limits);
+    },
 
     getOverflowBoards: () => get().overflowBoards ?? [],
 
@@ -623,16 +664,42 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Settings & Appearance ──────────────────────────────
     updateSettings: (newSettings) => {
-      set((state) => ({
-        settings: { ...state.settings, ...newSettings },
-      }));
+      set((state) => {
+        const selectedThemeId =
+          newSettings.selectedThemeId ?? state.settings.selectedThemeId;
+        const customWallpapers =
+          newSettings.customWallpapers ?? state.settings.customWallpapers;
+        const customThemes = customWallpapers.map(customWallpaperToTheme);
+        return {
+          settings: { ...state.settings, ...newSettings },
+          wallpaperTheme:
+            newSettings.selectedThemeId !== undefined
+              ? toWallpaperTheme(
+                  getThemeById(selectedThemeId, customThemes)?.id ??
+                    "default-dark",
+                )
+              : state.wallpaperTheme,
+        };
+      });
       get()._persist();
     },
 
     setWallpaper: (wallpaper) => {
-      set({ wallpaperTheme: wallpaper });
-      // Apply CSS variables immediately so theme updates live
-      applyTheme(wallpaper);
+      const customThemes = get().settings.customWallpapers.map(
+        customWallpaperToTheme,
+      );
+      const selectedThemeId =
+        getThemeById(wallpaper.id, customThemes)?.id ?? "default-dark";
+      const theme = getEffectiveTheme(
+        selectedThemeId,
+        getUserPlanLimits(get().user).isProUser,
+        customThemes,
+      );
+      set((state) => ({
+        wallpaperTheme: toWallpaperTheme(theme.id),
+        settings: { ...state.settings, selectedThemeId },
+      }));
+      applyTheme(theme);
       get()._persist();
     },
 
@@ -650,7 +717,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     addPage: (title) => {
-      if (!canCreatePage(get().pages)) return false;
+      const limits = getUserPlanLimits(get().user);
+      if (!limits.canCreatePage(get().pages.length)) return false;
       const newPage: Page = {
         id: generateId(),
         title,
@@ -697,7 +765,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     // ─── Board Actions ────────────────────────────────────────
     addBoard: (pageId, title) => {
       const page = get().pages.find((p) => p.id === pageId);
-      if (!canCreateBoard(page)) return false;
+      const limits = getUserPlanLimits(get().user);
+      if (!limits.canCreateBoard(page?.boards?.length ?? 0)) return false;
       const newBoard: Board = {
         id: generateId(),
         title,

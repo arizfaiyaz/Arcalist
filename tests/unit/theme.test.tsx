@@ -1,37 +1,38 @@
 import { describe, expect, it } from "vitest";
+import { getEffectiveTheme, getThemeById } from "../../src/config/themes";
 import { applyTheme } from "../../src/lib/theme";
 
-describe("applyTheme", () => {
+describe("theme presets", () => {
   it("sets light-mode text variables for readability", () => {
-    applyTheme({
-      id: "default-light",
-      name: "Default Light",
-      url: null,
-      isDark: false,
-      accentColor: "#7C3AED",
-      tone: "light",
-    });
+    const theme = getThemeById("default-light");
+    expect(theme).toBeDefined();
+    applyTheme(theme!);
 
     const root = document.documentElement;
     expect(root.classList.contains("light")).toBe(true);
-    expect(root.style.getPropertyValue("--text-primary")).toBe("#0f172a");
+    expect(root.style.getPropertyValue("--arc-text-primary")).toBe("#0f172a");
     expect(root.style.getPropertyValue("--glass-border")).toBe(
-      "rgba(15, 23, 42, 0.1)",
+      "var(--arc-glass-border)",
     );
   });
 
   it("sets glass variables for wallpaper themes", () => {
-    applyTheme({
-      id: "eclipse",
-      name: "Eclipse",
-      url: "/wallpapers/1.jpg",
-      isDark: true,
-      accentColor: "#FAD02C",
-      tone: "dark",
-    });
+    const theme = getThemeById("eclipse");
+    expect(theme).toBeDefined();
+    applyTheme(theme!);
 
     const root = document.documentElement;
     expect(root.classList.contains("has-wallpaper")).toBe(true);
-    expect(root.style.getPropertyValue("--glass-blur")).toBe("18px");
+    expect(root.style.getPropertyValue("--arc-glass-blur")).toBe("18px");
+    expect(root.style.getPropertyValue("--arc-wallpaper")).toBe(
+      "url(/wallpapers/1.jpg)",
+    );
+  });
+
+  it("falls back visually without deleting a saved pro theme", () => {
+    const effectiveTheme = getEffectiveTheme("aurora-glass", false);
+
+    expect(effectiveTheme.id).toBe("default-dark");
   });
 });
+

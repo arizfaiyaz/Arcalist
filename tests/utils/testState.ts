@@ -33,6 +33,8 @@ export function createBaseState(overrides?: Partial<ArcalistState>): ArcalistSta
     privacyMode: false,
     updatedAt: Date.now(),
     settings: {
+      selectedThemeId: "default-dark",
+      customWallpapers: [],
       compactMode: false,
       groupTools: false,
       smartTruncation: true,

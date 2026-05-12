@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { PageNav } from "../components/PageNav";
 import { BoardGrid } from "../components/BoardGrid";
@@ -10,6 +10,14 @@ import { SettingsPanel } from "../components/Settings/SettingsPanel";
 import { WallpaperPanel } from "../components/Wallpaper/WallpaperPanel";
 import { WallpaperButton } from "../components/Wallpaper/WallpaperButton";
 import { MultiSelectBar } from "../components/MultiSelect/MultiSelectBar";
+import { UpgradePromptModal } from "../components/UpgradePromptModal";
+import { usePlanLimits } from "../hooks/usePlanLimits";
+import { useTheme } from "../hooks/useTheme";
+import {
+  getLockedBoardCountForPlan,
+  getLockedPageCountForPlan,
+  getVisiblePagesForPlan,
+} from "../lib/planLimits";
 
 export function NewTabPage() {
   const pages = useArcalistStore((state) => state.pages);
@@ -19,8 +27,16 @@ export function NewTabPage() {
   const deletePage = useArcalistStore((state) => state.deletePage);
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
   const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
-  const wallpaperTheme = useArcalistStore((state) => state.wallpaperTheme);
-  const overflowBoards = useArcalistStore((state) => state.overflowBoards ?? []);
+  const planLimits = usePlanLimits();
+  const { effectiveTheme } = useTheme();
+  const visiblePages = useMemo(
+    () => getVisiblePagesForPlan(pages, planLimits),
+    [pages, planLimits],
+  );
+  const lockedPageCount = useMemo(
+    () => getLockedPageCountForPlan(pages, planLimits),
+    [pages, planLimits],
+  );
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -28,12 +44,24 @@ export function NewTabPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [overflowNoticeDismissed, setOverflowNoticeDismissed] = useState(false);
+  const [pageLockNoticeDismissed, setPageLockNoticeDismissed] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{
+    title: string;
+    description: string;
+    featureName: string;
+  } | null>(null);
   const [selectedBookmarks, setSelectedBookmarks] = useState<
     { id: string; boardId: string }[]
   >([]);
 
-  const activePage = pages.find((p) => p.id === activePageId) ?? pages[0];
+  const activePage =
+    visiblePages.find((p) => p.id === activePageId) ?? visiblePages[0];
+  const activeFullPage =
+    pages.find((p) => p.id === activePage?.id) ?? pages[0];
+  const lockedBoardCount = getLockedBoardCountForPlan(
+    activeFullPage,
+    planLimits,
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -56,6 +84,35 @@ export function NewTabPage() {
     return () => clearInterval(interval);
   }, [cleanupTrash]);
 
+  useEffect(() => {
+    if (!activePage && visiblePages[0]) {
+      setActivePage(visiblePages[0].id);
+      return;
+    }
+
+    if (activePage && activePage.id !== activePageId) {
+      setActivePage(activePage.id);
+    }
+  }, [activePage, activePageId, setActivePage, visiblePages]);
+
+  const showPageUpgradePrompt = () => {
+    setUpgradePrompt({
+      title: "Page limit reached",
+      description:
+        "Free plan supports up to 3 pages. Upgrade to Pro for unlimited pages.",
+      featureName: "Pages",
+    });
+  };
+
+  const showBoardUpgradePrompt = () => {
+    setUpgradePrompt({
+      title: "Board limit reached",
+      description:
+        "Free plan supports up to 10 boards per page. Upgrade to Pro for unlimited boards.",
+      featureName: "Boards",
+    });
+  };
+
   const handleBookmarkSelect = (bookmarkId: string, boardId: string) => {
     setSelectedBookmarks((prev) => {
       const exists = prev.find((b) => b.id === bookmarkId);
@@ -76,7 +133,7 @@ export function NewTabPage() {
     return (
       <div
         className="min-h-screen bg-background flex items-center justify-center"
-        style={wallpaperTheme.url ? { background: "transparent" } : undefined}
+        style={effectiveTheme.wallpaper ? { background: "transparent" } : undefined}
       >
         <div className="w-6 h-6 rounded-full border-2 border-accent border-t-transparent animate-spin" />
       </div>
@@ -86,7 +143,7 @@ export function NewTabPage() {
   return (
     <div
       className={
-        wallpaperTheme.url
+        effectiveTheme.wallpaper
           ? "min-h-screen newtab-layout"
           : "min-h-screen bg-background newtab-layout"
       }
@@ -106,51 +163,56 @@ export function NewTabPage() {
       </aside>
 
       <main className="newtab-center">
-        <PageNav
-          pages={pages}
-          activePageId={activePageId}
-          onPageChange={setActivePage}
-          onAddPage={addPage}
-          onDeletePage={deletePage}
-        />
+        <div className="newtab-workspace">
+          <PageNav
+            pages={visiblePages}
+            activePageId={activePage?.id ?? activePageId}
+            onPageChange={setActivePage}
+            onAddPage={addPage}
+            onDeletePage={deletePage}
+            lockedPageCount={lockedPageCount}
+            onPageLimitReached={showPageUpgradePrompt}
+          />
 
-        {overflowBoards.length > 0 && !overflowNoticeDismissed && (
-          <div className="mt-3 mb-2 flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/80">
-            <div className="flex-1">
-              <p className="text-amber-100">
-                Some boards are hidden because the free plan supports up to 30
-                visible boards.
-              </p>
-              <p className="text-amber-100/70">
-                Your hidden boards are safe and can be restored when you
-                upgrade.
-              </p>
+          {lockedPageCount > 0 && !pageLockNoticeDismissed && (
+            <div className="mt-3 mb-2 flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/80">
+              <div className="flex-1">
+                <p className="text-amber-100">
+                  You have {lockedPageCount} extra{" "}
+                  {lockedPageCount === 1 ? "page" : "pages"} saved.
+                </p>
+                <p className="text-amber-100/70">
+                  Upgrade to Pro to unlock them.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={showPageUpgradePrompt}
+                  className="px-2.5 py-1 rounded-full text-xs border border-amber-300/30 text-amber-100/80 hover:bg-amber-500/10"
+                  title="Upgrade to Pro"
+                >
+                  Upgrade
+                </button>
+                <button
+                  onClick={() => setPageLockNoticeDismissed(true)}
+                  className="px-2 py-1 rounded-full text-xs text-amber-100/70 hover:text-amber-100 hover:bg-amber-500/10"
+                  title="Dismiss"
+                >
+                  Dismiss
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                disabled
-                className="px-2.5 py-1 rounded-full text-xs border border-amber-300/30 text-amber-100/60 opacity-70 cursor-not-allowed"
-                title="Upgrade coming soon"
-              >
-                Upgrade coming soon
-              </button>
-              <button
-                onClick={() => setOverflowNoticeDismissed(true)}
-                className="px-2 py-1 rounded-full text-xs text-amber-100/70 hover:text-amber-100 hover:bg-amber-500/10"
-                title="Dismiss"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
+          )}
 
-        <BoardGrid
-          page={activePage}
-          multiSelectMode={multiSelectMode}
-          selectedBookmarks={selectedBookmarks.map((b) => b.id)}
-          onBookmarkSelect={handleBookmarkSelect}
-        />
+          <BoardGrid
+            page={activePage}
+            multiSelectMode={multiSelectMode}
+            selectedBookmarks={selectedBookmarks.map((b) => b.id)}
+            onBookmarkSelect={handleBookmarkSelect}
+            lockedBoardCount={lockedBoardCount}
+            onBoardLimitReached={showBoardUpgradePrompt}
+          />
+        </div>
       </main>
 
       <aside className="newtab-rail newtab-rail-right">
@@ -184,6 +246,14 @@ export function NewTabPage() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+      {upgradePrompt && (
+        <UpgradePromptModal
+          title={upgradePrompt.title}
+          description={upgradePrompt.description}
+          featureName={upgradePrompt.featureName}
+          onClose={() => setUpgradePrompt(null)}
+        />
+      )}
     </div>
   );
 }

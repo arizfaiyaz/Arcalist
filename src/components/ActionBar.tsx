@@ -93,7 +93,7 @@ export function ActionBar({
             active={menuOpen}
           />
           {menuOpen && (
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 w-56 bg-surface border border-white/10 rounded-xl shadow-xl shadow-black/40 p-2">
+            <div className="absolute right-12 top-1/2 -translate-y-1/2 w-56 bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-xl shadow-xl shadow-black/40 p-2">
               {actions.map((action) => (
                 <button
                   key={action.label}
@@ -103,8 +103,8 @@ export function ActionBar({
                   }}
                   className={cn(
                     "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
-                    "text-slate-300 hover:text-white hover:bg-surface-2",
-                    action.active && "text-accent",
+                    "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]",
+                    action.active && "text-[var(--arc-accent)]",
                   )}
                 >
                   <action.icon size={14} />
@@ -185,14 +185,14 @@ function ActionButton({
       onClick={onClick}
       title={label}
       className={cn(
-        "w-9 h-9 rounded-full flex items-center justify-center",
+        "w-10 h-10 rounded-full flex items-center justify-center",
         "border transition-all duration-150 shadow-lg shadow-black/20",
         active
-          ? "bg-accent/20 border-accent/50 text-accent"
-          : "bg-surface border-white/10 text-slate-400 hover:text-white hover:border-accent/30 hover:bg-surface-2",
+          ? "bg-accent/20 border-[var(--arc-accent)] text-[var(--arc-accent)]"
+          : "bg-[var(--arc-button-bg)] border-[var(--arc-glass-border)] text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:border-[var(--arc-accent)] hover:bg-[var(--arc-button-bg)]",
       )}
     >
-      <Icon size={15} />
+      <Icon size={17} />
     </button>
   );
 }

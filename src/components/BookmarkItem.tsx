@@ -27,11 +27,6 @@ export function BookmarkItem({
   const { openInNewTab, shortenTitles, showDescriptions } = useArcalistStore(
     (state) => state.settings,
   );
-  const titleTextClass = useArcalistStore((state) =>
-    state.wallpaperTheme.isDark
-      ? "text-slate-300 group-hover:text-white"
-      : "text-slate-700 group-hover:text-slate-900",
-  );
   const [imgError, setImgError] = useState(false);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
@@ -102,7 +97,7 @@ export function BookmarkItem({
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
           "group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
-          "hover:bg-surface-2 transition-colors duration-150",
+          "hover:bg-[var(--arc-button-bg)] transition-colors duration-150",
           isSelected && "bg-accent/10 border border-accent/20",
         )}
       >
@@ -114,7 +109,7 @@ export function BookmarkItem({
               "w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all",
               isSelected
                 ? "bg-accent border-accent"
-                : "border-slate-500 hover:border-accent",
+                : "border-[var(--arc-text-secondary)] hover:border-[var(--arc-accent)]",
             )}
           >
             {isSelected && (
@@ -135,7 +130,7 @@ export function BookmarkItem({
             {...listeners}
             className={cn(
               "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
-              "text-slate-600 hover:text-slate-400 cursor-grab active:cursor-grabbing touch-none",
+              "text-[var(--arc-text-secondary)] opacity-60 hover:opacity-100 cursor-grab active:cursor-grabbing touch-none",
             )}
           >
             <GripVertical size={12} />
@@ -166,7 +161,7 @@ export function BookmarkItem({
                 />
               ) : (
                 <div className="w-4 h-4 rounded-sm bg-surface-2 flex items-center justify-center">
-                  <span className="text-[8px] text-slate-400 font-bold uppercase">
+                  <span className="text-[8px] text-[var(--arc-text-secondary)] font-bold uppercase">
                     {bookmark.title.charAt(0)}
                   </span>
                 </div>
@@ -179,7 +174,7 @@ export function BookmarkItem({
                 "text-sm leading-none",
                 shortenTitles ? "truncate" : "whitespace-normal break-words",
                 "transition-all duration-200 select-none",
-                titleTextClass,
+                "text-[var(--arc-text-primary)] opacity-85 group-hover:opacity-100",
                 privacyMode && !isHovered && "blur-sm",
               )}
             >
@@ -188,7 +183,7 @@ export function BookmarkItem({
           </button>
 
           {showDescriptions && bookmark.description && (
-            <p className="text-[11px] text-slate-500 pl-6 pr-2 mt-0.5">
+            <p className="text-[11px] text-[var(--arc-text-secondary)] pl-6 pr-2 mt-0.5">
               {bookmark.description}
             </p>
           )}
@@ -200,7 +195,7 @@ export function BookmarkItem({
           className={cn(
             "opacity-0 group-hover:opacity-100 transition-opacity",
             "w-4 h-4 flex items-center justify-center shrink-0",
-            "text-slate-600 hover:text-accent",
+            "text-[var(--arc-text-secondary)] opacity-60 hover:text-[var(--arc-accent)] hover:opacity-100",
           )}
           title="Edit bookmark"
         >
@@ -211,7 +206,7 @@ export function BookmarkItem({
           className={cn(
             "opacity-0 group-hover:opacity-100 transition-opacity",
             "w-4 h-4 flex items-center justify-center shrink-0",
-            "text-slate-600 hover:text-red-400",
+            "text-[var(--arc-text-secondary)] opacity-60 hover:text-red-400 hover:opacity-100",
           )}
         >
           <Trash2 size={10} />
@@ -225,7 +220,7 @@ export function BookmarkItem({
           style={{ top: contextMenu.y, left: contextMenu.x }}
           className={cn(
             "fixed z-50 min-w-44",
-            "bg-surface border border-white/10 rounded-xl",
+            "bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-xl",
             "shadow-xl shadow-black/40 py-1",
             "overflow-hidden",
           )}
@@ -244,7 +239,7 @@ export function BookmarkItem({
             onClick={openIncognito}
             accent
           />
-          <div className="h-px bg-white/5 my-1" />
+          <div className="h-px bg-[var(--arc-glass-border)] my-1" />
           <ContextMenuItem
             icon={Trash2}
             label="Move to trash"
@@ -284,11 +279,11 @@ function ContextMenuItem({
       className={cn(
         "w-full flex items-center gap-2.5 px-3 py-2 text-sm",
         "transition-colors duration-100",
-        danger && "text-slate-400 hover:text-red-400 hover:bg-red-400/5",
-        accent && "text-slate-400 hover:text-accent hover:bg-accent/5",
+        danger && "text-[var(--arc-text-secondary)] hover:text-red-400 hover:bg-red-400/5",
+        accent && "text-[var(--arc-text-secondary)] hover:text-[var(--arc-accent)] hover:bg-accent/5",
         !danger &&
           !accent &&
-          "text-slate-400 hover:text-white hover:bg-surface-2",
+          "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]",
       )}
     >
       <Icon size={13} />
