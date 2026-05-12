@@ -7,11 +7,14 @@ import { ImportDialog } from "../components/Import/ImportDialog";
 import { ActionBar } from "../components/ActionBar";
 import { TrashPanel } from "../components/Trash/TrashPanel";
 import { SettingsPanel } from "../components/Settings/SettingsPanel";
+import { ProductivityAnalyticsPanel } from "../components/analytics/ProductivityAnalyticsPanel";
+import { SmartCollectionsPanel } from "../components/smart-collections/SmartCollectionsPanel";
 import { WallpaperPanel } from "../components/Wallpaper/WallpaperPanel";
 import { WallpaperButton } from "../components/Wallpaper/WallpaperButton";
 import { MultiSelectBar } from "../components/MultiSelect/MultiSelectBar";
 import { UpgradePromptModal } from "../components/UpgradePromptModal";
 import { usePlanLimits } from "../hooks/usePlanLimits";
+import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
 import {
   getLockedBoardCountForPlan,
@@ -42,6 +45,8 @@ export function NewTabPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [smartCollectionsOpen, setSmartCollectionsOpen] = useState(false);
+  const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [pageLockNoticeDismissed, setPageLockNoticeDismissed] = useState(false);
@@ -85,6 +90,10 @@ export function NewTabPage() {
   }, [cleanupTrash]);
 
   useEffect(() => {
+    void setAnalyticsPlanStatus(planLimits.isProUser, planLimits.planName);
+  }, [planLimits.isProUser, planLimits.planName]);
+
+  useEffect(() => {
     if (!activePage && visiblePages[0]) {
       setActivePage(visiblePages[0].id);
       return;
@@ -111,6 +120,32 @@ export function NewTabPage() {
         "Free plan supports up to 10 boards per page. Upgrade to Pro for unlimited boards.",
       featureName: "Boards",
     });
+  };
+
+  const handleSmartCollectionsOpen = () => {
+    if (!planLimits.isProUser) {
+      setUpgradePrompt({
+        title: "Smart Collections are available with Arcalist Pro.",
+        description:
+          "Upgrade to Pro to unlock automatic bookmark collections like Recently Added, Most Visited, Duplicate Links, domains, developer tools, social links, and reading lists.",
+        featureName: "Smart Collections",
+      });
+      return;
+    }
+    setSmartCollectionsOpen(true);
+  };
+
+  const handleAnalyticsOpen = () => {
+    if (!planLimits.isProUser) {
+      setUpgradePrompt({
+        title: "Productivity analytics are available with Arcalist Pro.",
+        description:
+          "Upgrade to Pro to see domain-level time tracking, daily and weekly trends, top websites, and productivity breakdowns.",
+        featureName: "Productivity Analytics",
+      });
+      return;
+    }
+    setAnalyticsOpen(true);
   };
 
   const handleBookmarkSelect = (bookmarkId: string, boardId: string) => {
@@ -222,11 +257,15 @@ export function NewTabPage() {
           onImportOpen={() => setImportOpen(true)}
           onTrashOpen={() => setTrashOpen(true)}
           onSettingsOpen={() => setSettingsOpen(true)}
+          onSmartCollectionsOpen={handleSmartCollectionsOpen}
+          onAnalyticsOpen={handleAnalyticsOpen}
           onMultiSelectToggle={() => {
             setMultiSelectMode((v) => !v);
             setSelectedBookmarks([]);
           }}
           multiSelectMode={multiSelectMode}
+          smartCollectionsLocked={!planLimits.isProUser}
+          analyticsLocked={!planLimits.isProUser}
         />
       </aside>
 
@@ -242,6 +281,14 @@ export function NewTabPage() {
       <SearchOverlay open={searchOpen} onClose={() => setSearchOpen(false)} />
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
       <TrashPanel open={trashOpen} onClose={() => setTrashOpen(false)} />
+      <SmartCollectionsPanel
+        open={smartCollectionsOpen && planLimits.isProUser}
+        onClose={() => setSmartCollectionsOpen(false)}
+      />
+      <ProductivityAnalyticsPanel
+        open={analyticsOpen && planLimits.isProUser}
+        onClose={() => setAnalyticsOpen(false)}
+      />
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}

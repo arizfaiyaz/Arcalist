@@ -7,6 +7,8 @@ import {
   LayoutGrid,
   Settings,
   MoreVertical,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { useArcalistStore } from "../store/useArcalistStore";
@@ -17,8 +19,12 @@ type Props = {
   onImportOpen: () => void;
   onTrashOpen: () => void;
   onSettingsOpen: () => void;
+  onSmartCollectionsOpen: () => void;
+  onAnalyticsOpen: () => void;
   onMultiSelectToggle: () => void;
   multiSelectMode: boolean;
+  smartCollectionsLocked?: boolean;
+  analyticsLocked?: boolean;
   layout?: "floating" | "rail";
   className?: string;
 };
@@ -28,8 +34,12 @@ export function ActionBar({
   onImportOpen,
   onTrashOpen,
   onSettingsOpen,
+  onSmartCollectionsOpen,
+  onAnalyticsOpen,
   onMultiSelectToggle,
   multiSelectMode,
+  smartCollectionsLocked = false,
+  analyticsLocked = false,
   layout = "floating",
   className,
 }: Props) {
@@ -46,6 +56,18 @@ export function ActionBar({
       icon: Search,
       label: "Search (Ctrl+K)",
       onClick: onSearchOpen,
+    },
+    {
+      icon: Sparkles,
+      label: "Smart Collections",
+      onClick: onSmartCollectionsOpen,
+      badge: smartCollectionsLocked ? "Pro" : null,
+    },
+    {
+      icon: BarChart3,
+      label: "Productivity Analytics",
+      onClick: onAnalyticsOpen,
+      badge: analyticsLocked ? "Pro" : null,
     },
     {
       icon: privacyMode ? Eye : EyeOff,
@@ -128,6 +150,20 @@ export function ActionBar({
           />
 
           <ActionButton
+            icon={Sparkles}
+            label="Smart Collections"
+            onClick={onSmartCollectionsOpen}
+            badge={smartCollectionsLocked ? "Pro" : undefined}
+          />
+
+          <ActionButton
+            icon={BarChart3}
+            label="Productivity Analytics"
+            onClick={onAnalyticsOpen}
+            badge={analyticsLocked ? "Pro" : undefined}
+          />
+
+          <ActionButton
             icon={privacyMode ? Eye : EyeOff}
             label={
               privacyMode ? "Disable privacy mode" : "Enable privacy mode"
@@ -174,11 +210,13 @@ function ActionButton({
   label,
   onClick,
   active,
+  badge,
 }: {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
   active?: boolean;
+  badge?: string;
 }) {
   return (
     <button
@@ -186,6 +224,7 @@ function ActionButton({
       title={label}
       className={cn(
         "w-10 h-10 rounded-full flex items-center justify-center",
+        "relative",
         "border transition-all duration-150 shadow-lg shadow-black/20",
         active
           ? "bg-accent/20 border-[var(--arc-accent)] text-[var(--arc-accent)]"
@@ -193,6 +232,11 @@ function ActionButton({
       )}
     >
       <Icon size={17} />
+      {badge && (
+        <span className="absolute -right-2 -top-1 rounded-full border border-amber-300/30 bg-amber-500/20 px-1 text-[8px] font-semibold leading-4 text-amber-100">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

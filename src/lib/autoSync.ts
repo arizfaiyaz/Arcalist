@@ -34,6 +34,15 @@ function buildBoardUrlMap(state: ArcalistState): Map<string, Set<string>> {
   return map;
 }
 
+function timestampValue(value: number | string | undefined): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 export async function autoSyncChromeBookmarks(
   state: ArcalistState
 ): Promise<boolean> {
@@ -119,7 +128,7 @@ export async function autoSyncChromeBookmarks(
         const before = board.bookmarks.length;
 
         for (const bm of directBookmarks) {
-          if (!isFirstSync && (bm.createdAt ?? 0) < lastSyncTime) continue;
+          if (!isFirstSync && timestampValue(bm.createdAt) < lastSyncTime) continue;
           if (existingUrls.has(bm.url)) continue;
           board.bookmarks.push(bm);
           existingUrls.add(bm.url);

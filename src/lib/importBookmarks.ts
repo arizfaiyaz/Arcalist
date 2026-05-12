@@ -33,13 +33,16 @@ export function createBookmarkFromNode(
   if (!node.url) return null;
   const url = normalizeUrl(node.url);
   if (!url) return null;
+  const createdAt = node.dateAdded || Date.now();
   return {
     id: generateId(),
     title: node.title || url,
     url,
     favicon: favicon(url),
     chromeBookmarkId: node.id,
-    createdAt: node.dateAdded || Date.now(),
+    createdAt,
+    updatedAt: createdAt,
+    visitCount: 0,
   };
 }
 

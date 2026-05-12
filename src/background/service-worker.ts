@@ -8,9 +8,38 @@ import {
   initializeAutoSync,
   handleAutoSyncAlarm,
 } from "../lib/autoSync";
+import { getDomainFromUrl, getFaviconForDomain } from "../lib/domain";
+import {
+  addDomainTime,
+  ANALYTICS_PLAN_STORAGE_KEY,
+  ANALYTICS_STORAGE_KEY,
+  createDefaultAnalyticsState,
+  getTodayKey,
+  normalizeAnalyticsState,
+  type AnalyticsMessage,
+  type AnalyticsPlanStatus,
+  type ProductivityAnalyticsState,
+} from "../lib/productivityAnalytics";
 import type { ArcalistState } from "../types";
 
 const STORAGE_KEY = "arcalist_state";
+const ANALYTICS_ALARM_NAME = "arcalist-analytics-flush";
+const ANALYTICS_IDLE_THRESHOLD_SECONDS = 60;
+const MIN_TRACKED_MS = 1000;
+
+type ActiveTrackingSession = {
+  domain: string;
+  startedAt: number;
+  tabId: number;
+  windowId: number;
+  faviconUrl?: string;
+};
+
+type IdleStateValue = `${chrome.idle.IdleState}`;
+
+let activeSession: ActiveTrackingSession | null = null;
+let currentWindowFocused = true;
+let currentIdleState: IdleStateValue = "active";
 
 // ─── Helpers ─────────────────────────────────────────────
 
@@ -20,6 +49,14 @@ function generateId(): string {
 
 function favicon(domain: string): string {
   return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+}
+
+function getHostname(url: string): string | null {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
 }
 
 async function getState(): Promise<ArcalistState | null> {
@@ -37,6 +74,141 @@ function notifyNewTab() {
   });
 }
 
+// ─── Productivity Analytics ──────────────────────────────
+
+async function getAnalyticsState(): Promise<ProductivityAnalyticsState> {
+  const result = await chrome.storage.local.get(ANALYTICS_STORAGE_KEY);
+  return normalizeAnalyticsState(
+    result[ANALYTICS_STORAGE_KEY] as Partial<ProductivityAnalyticsState> | null,
+  );
+}
+
+async function saveAnalyticsState(state: ProductivityAnalyticsState) {
+  await chrome.storage.local.set({ [ANALYTICS_STORAGE_KEY]: state });
+}
+
+async function getAnalyticsPlanStatus(): Promise<AnalyticsPlanStatus> {
+  const result = await chrome.storage.local.get(ANALYTICS_PLAN_STORAGE_KEY);
+  const stored = result[ANALYTICS_PLAN_STORAGE_KEY] as
+    | Partial<AnalyticsPlanStatus>
+    | undefined;
+  return {
+    isProUser: stored?.isProUser ?? false,
+    planName: stored?.planName === "pro" ? "pro" : "free",
+    updatedAt: stored?.updatedAt ?? new Date().toISOString(),
+  };
+}
+
+async function canTrackAnalytics() {
+  const [analytics, plan] = await Promise.all([
+    getAnalyticsState(),
+    getAnalyticsPlanStatus(),
+  ]);
+  return {
+    allowed:
+      analytics.trackingEnabled &&
+      plan.isProUser &&
+      currentWindowFocused &&
+      currentIdleState === "active",
+    analytics,
+  };
+}
+
+async function flushActiveSession() {
+  if (!activeSession) return;
+  const session = activeSession;
+  activeSession = null;
+
+  const elapsedMs = Date.now() - session.startedAt;
+  if (elapsedMs < MIN_TRACKED_MS) return;
+
+  const analytics = await getAnalyticsState();
+  if (
+    !analytics.trackingEnabled ||
+    analytics.excludedDomains.includes(session.domain)
+  ) {
+    return;
+  }
+
+  await saveAnalyticsState(
+    addDomainTime(
+      analytics,
+      session.domain,
+      elapsedMs,
+      session.faviconUrl,
+      getTodayKey(),
+    ),
+  );
+}
+
+async function getActiveTab(windowId?: number) {
+  const query: chrome.tabs.QueryInfo =
+    typeof windowId === "number"
+      ? { active: true, windowId }
+      : { active: true, lastFocusedWindow: true };
+  const [tab] = await chrome.tabs.query(query);
+  return tab ?? null;
+}
+
+async function tabWindowIsFocused(tab: chrome.tabs.Tab) {
+  if (typeof tab.windowId !== "number") return false;
+  try {
+    const windowInfo = await chrome.windows.get(tab.windowId);
+    return Boolean(windowInfo.focused);
+  } catch {
+    return false;
+  }
+}
+
+async function startSessionForTab(tab: chrome.tabs.Tab | null) {
+  await flushActiveSession();
+  if (!tab?.url || tab.id === undefined || tab.windowId === undefined) return;
+  if (tab.incognito) return;
+
+  const domain = getDomainFromUrl(tab.url);
+  if (!domain) return;
+
+  const focused = await tabWindowIsFocused(tab);
+  currentWindowFocused = focused;
+  if (!focused) return;
+
+  const { allowed, analytics } = await canTrackAnalytics();
+  if (!allowed || analytics.excludedDomains.includes(domain)) return;
+
+  activeSession = {
+    domain,
+    tabId: tab.id,
+    windowId: tab.windowId,
+    startedAt: Date.now(),
+    faviconUrl: tab.favIconUrl || getFaviconForDomain(domain),
+  };
+}
+
+async function restartTrackingForActiveTab(windowId?: number) {
+  const tab = await getActiveTab(windowId);
+  await startSessionForTab(tab);
+}
+
+async function flushAndRestartActiveSession() {
+  const sessionWindowId = activeSession?.windowId;
+  await flushActiveSession();
+  await restartTrackingForActiveTab(sessionWindowId);
+}
+
+function initializeAnalyticsTracking() {
+  chrome.alarms.create(ANALYTICS_ALARM_NAME, { periodInMinutes: 1 });
+  chrome.idle?.setDetectionInterval?.(ANALYTICS_IDLE_THRESHOLD_SECONDS);
+  void chrome.idle?.queryState?.(
+    ANALYTICS_IDLE_THRESHOLD_SECONDS,
+    (state) => {
+      currentIdleState = state ?? "active";
+      if (currentIdleState === "active") {
+        void restartTrackingForActiveTab();
+      }
+    },
+  );
+}
+
 // ─── Install ─────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details) => {
@@ -49,6 +221,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
   // Initialize auto-sync on install or update
   await initializeAutoSync();
+  initializeAnalyticsTracking();
+});
+
+chrome.runtime.onStartup?.addListener(() => {
+  initializeAnalyticsTracking();
+  void restartTrackingForActiveTab();
 });
 
 // ─── Auto-Sync Alarm ──────────────────────────────────────
@@ -56,8 +234,135 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "arcalist-auto-sync") {
     await handleAutoSyncAlarm();
+  } else if (alarm.name === ANALYTICS_ALARM_NAME) {
+    await flushAndRestartActiveSession();
   }
 });
+
+chrome.tabs.onActivated.addListener((activeInfo) => {
+  void restartTrackingForActiveTab(activeInfo.windowId);
+});
+
+chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
+  if (!tab.active) return;
+  if (!changeInfo.url && changeInfo.status !== "complete") return;
+  void startSessionForTab(tab);
+});
+
+chrome.windows.onFocusChanged.addListener((windowId) => {
+  if (windowId === chrome.windows.WINDOW_ID_NONE) {
+    currentWindowFocused = false;
+    void flushActiveSession();
+    return;
+  }
+  currentWindowFocused = true;
+  void restartTrackingForActiveTab(windowId);
+});
+
+chrome.idle?.onStateChanged?.addListener((newState) => {
+  currentIdleState = newState;
+  if (newState === "active") {
+    void restartTrackingForActiveTab();
+  } else {
+    void flushActiveSession();
+  }
+});
+
+chrome.runtime.onMessage.addListener(
+  (
+    message: AnalyticsMessage | { type: string },
+    _sender,
+    sendResponse,
+  ) => {
+    if (!message?.type?.startsWith("ANALYTICS_")) return false;
+
+    void (async () => {
+      try {
+        const analyticsMessage = message as AnalyticsMessage;
+
+        if (analyticsMessage.type === "ANALYTICS_FLUSH_ACTIVE_SESSION") {
+          await flushAndRestartActiveSession();
+          sendResponse({ ok: true, stats: await getAnalyticsState() });
+          return;
+        }
+
+        if (analyticsMessage.type === "ANALYTICS_GET_STATS") {
+          await flushAndRestartActiveSession();
+          sendResponse({ ok: true, stats: await getAnalyticsState() });
+          return;
+        }
+
+        if (analyticsMessage.type === "ANALYTICS_SET_TRACKING_ENABLED") {
+          const analytics = await getAnalyticsState();
+          const next = {
+            ...analytics,
+            trackingEnabled: analyticsMessage.enabled,
+            lastUpdatedAt: new Date().toISOString(),
+          };
+          await saveAnalyticsState(next);
+          if (analyticsMessage.enabled) {
+            await restartTrackingForActiveTab();
+          } else {
+            await flushActiveSession();
+          }
+          sendResponse({ ok: true, stats: next });
+          return;
+        }
+
+        if (analyticsMessage.type === "ANALYTICS_CLEAR_TODAY") {
+          await flushActiveSession();
+          const analytics = await getAnalyticsState();
+          const next = {
+            ...analytics,
+            lastUpdatedAt: new Date().toISOString(),
+            domainStats: {
+              ...analytics.domainStats,
+              [getTodayKey()]: {},
+            },
+          };
+          await saveAnalyticsState(next);
+          await restartTrackingForActiveTab();
+          sendResponse({ ok: true, stats: next });
+          return;
+        }
+
+        if (analyticsMessage.type === "ANALYTICS_CLEAR_ALL") {
+          await flushActiveSession();
+          const next = {
+            ...createDefaultAnalyticsState(),
+            trackingEnabled: (await getAnalyticsState()).trackingEnabled,
+          };
+          await saveAnalyticsState(next);
+          await restartTrackingForActiveTab();
+          sendResponse({ ok: true, stats: next });
+          return;
+        }
+
+        if (analyticsMessage.type === "ANALYTICS_SET_PLAN_STATUS") {
+          await chrome.storage.local.set({
+            [ANALYTICS_PLAN_STORAGE_KEY]: analyticsMessage.plan,
+          });
+          if (analyticsMessage.plan.isProUser) {
+            await restartTrackingForActiveTab();
+          } else {
+            await flushActiveSession();
+          }
+          sendResponse({ ok: true });
+          return;
+        }
+
+        sendResponse({ ok: false, error: "Unknown analytics message." });
+      } catch (error) {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    })();
+
+    return true;
+  },
+);
 
 // ─── Quick Save Command ───────────────────────────────────
 
@@ -72,12 +377,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   )
     return;
 
-  let domain = "";
-  try {
-    domain = new URL(tab.url).hostname;
-  } catch {
-    return;
-  }
+  const domain = getHostname(tab.url);
+  if (!domain) return;
 
   const state = await getState();
   if (!state) return;
@@ -98,13 +399,17 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   if (!targetBoard) return;
 
+  const now = new Date().toISOString();
   targetBoard.bookmarks.unshift({
     id: generateId(),
     title: tab.title,
     url: tab.url,
     favicon: favicon(domain),
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
+    visitCount: 0,
   });
+  state.updatedAt = Date.now();
 
   await saveState(state);
 
@@ -149,20 +454,19 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
 
     if (!boardId) return; // Folder not tracked by Arcalist — ignore
 
-    let domain = "";
-    try {
-      domain = new URL(bookmark.url).hostname;
-    } catch {
-      return;
-    }
+    const domain = getHostname(bookmark.url);
+    if (!domain) return;
 
+    const now = new Date().toISOString();
     const newBookmark = {
       id: generateId(),
       title: bookmark.title || domain,
       url: bookmark.url,
       favicon: favicon(domain),
       chromeBookmarkId: id,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
+      visitCount: 0,
     };
 
     // Find the target board across all pages and add the bookmark
@@ -180,6 +484,7 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
     }
 
     if (added) {
+      state.updatedAt = Date.now();
       await saveState(state);
       notifyNewTab();
     }

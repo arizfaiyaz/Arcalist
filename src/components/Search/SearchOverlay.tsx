@@ -164,8 +164,12 @@ function SearchResult({
 }) {
   const { bookmark, boardTitle, pageTitle } = result
   const [imgError, setImgError] = useState(false)
+  const recordBookmarkVisit = useArcalistStore(
+    (state) => state.recordBookmarkVisit,
+  )
 
   const handleClick = () => {
+    recordBookmarkVisit(result.boardId, bookmark.id)
     window.open(bookmark.url, '_self')
     onSelect()
   }

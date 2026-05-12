@@ -20,7 +20,8 @@
     "activeTab",
     "windows",
     "identity",
-    "alarms"
+    "alarms",
+    "idle"
   ],
 
   "icons": {

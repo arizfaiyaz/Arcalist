@@ -49,6 +49,17 @@ function buildFavicon(url: string): string {
   }
 }
 
+function normalizeBookmark(bookmark: Bookmark): Bookmark {
+  return {
+    ...bookmark,
+    title: bookmark.title ?? "",
+    url: bookmark.url ?? "",
+    favicon: bookmark.favicon ?? bookmark.faviconUrl ?? buildFavicon(bookmark.url ?? ""),
+    visitCount: bookmark.visitCount ?? 0,
+    tags: bookmark.tags ?? undefined,
+  };
+}
+
 type ArcalistStore = ArcalistState & {
   // Auth state
   user: User | null;
@@ -90,8 +101,20 @@ type ArcalistStore = ArcalistState & {
   updateBookmark: (
     boardId: string,
     bookmarkId: string,
-    updates: Partial<Pick<Bookmark, "title" | "url" | "description">>,
+    updates: Partial<
+      Pick<
+        Bookmark,
+        | "title"
+        | "url"
+        | "description"
+        | "updatedAt"
+        | "lastVisitedAt"
+        | "visitCount"
+        | "tags"
+      >
+    >,
   ) => void;
+  recordBookmarkVisit: (boardId: string, bookmarkId: string) => void;
   moveBookmark: (
     fromBoardId: string,
     toBoardId: string,
@@ -150,7 +173,17 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     const customThemes = customWallpapers.map(customWallpaperToTheme);
     const merged: ArcalistState = {
       ...state,
-      trash: state.trash ?? [],
+      pages: (state.pages ?? []).map((page) => ({
+        ...page,
+        boards: (page.boards ?? []).map((board) => ({
+          ...board,
+          bookmarks: (board.bookmarks ?? []).map(normalizeBookmark),
+        })),
+      })),
+      trash: (state.trash ?? []).map((item) => ({
+        ...item,
+        bookmark: normalizeBookmark(item.bookmark),
+      })),
       settings: {
         ...defaultState.settings,
         ...state.settings,
@@ -866,10 +899,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Bookmark Actions ─────────────────────────────────────
     addBookmark: (boardId, bookmark) => {
+      const now = new Date().toISOString();
       const newBookmark: Bookmark = {
         id: generateId(),
-        createdAt: Date.now(),
         ...bookmark,
+        createdAt: now,
+        updatedAt: now,
+        visitCount: bookmark.visitCount ?? 0,
       };
       set((state) => ({
         pages: state.pages.map((p) => ({
@@ -905,8 +941,35 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
                 if (updates.url && updates.url !== bm.url) {
                   next.favicon = buildFavicon(updates.url);
                 }
+                next.updatedAt = updates.updatedAt ?? new Date().toISOString();
                 return next;
               }),
+            };
+          }),
+        })),
+      }));
+      get()._persist();
+    },
+
+    recordBookmarkVisit: (boardId, bookmarkId) => {
+      const now = new Date().toISOString();
+      set((state) => ({
+        pages: state.pages.map((p) => ({
+          ...p,
+          boards: p.boards.map((b) => {
+            if (b.id !== boardId) return b;
+            return {
+              ...b,
+              bookmarks: b.bookmarks.map((bm) =>
+                bm.id === bookmarkId
+                  ? {
+                      ...bm,
+                      visitCount: (bm.visitCount ?? 0) + 1,
+                      lastVisitedAt: now,
+                      updatedAt: now,
+                    }
+                  : bm,
+              ),
             };
           }),
         })),

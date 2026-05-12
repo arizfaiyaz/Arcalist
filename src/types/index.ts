@@ -2,12 +2,17 @@ export type Bookmark = {
   id: string
   title: string
   url: string
-  favicon: string
+  favicon?: string
+  faviconUrl?: string
   incognito?: boolean
   description?: string
   isTrashed?: boolean
   chromeBookmarkId?: string
-  createdAt: number  //timestamp
+  createdAt?: number | string
+  updatedAt?: number | string
+  lastVisitedAt?: string
+  visitCount?: number
+  tags?: string[]
 }
 
 export type Board = {

@@ -23,6 +23,9 @@ export function BookmarkItem({
   onSelect,
 }: Props) {
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
+  const recordBookmarkVisit = useArcalistStore(
+    (state) => state.recordBookmarkVisit,
+  );
   const privacyMode = useArcalistStore((state) => state.privacyMode);
   const { openInNewTab, shortenTitles, showDescriptions } = useArcalistStore(
     (state) => state.settings,
@@ -73,6 +76,7 @@ export function BookmarkItem({
   };
 
   const openIncognito = () => {
+    recordBookmarkVisit(boardId, bookmark.id);
     // chrome.windows.create only works in extension context
     if (typeof chrome !== "undefined" && chrome.windows) {
       chrome.windows.create({ url: bookmark.url, incognito: true });
@@ -140,9 +144,10 @@ export function BookmarkItem({
         {/* Clickable link */}
         <div className="flex-1 min-w-0">
           <button
-            onClick={() =>
-              window.open(bookmark.url, openInNewTab ? "_blank" : "_self")
-            }
+            onClick={() => {
+              recordBookmarkVisit(boardId, bookmark.id);
+              window.open(bookmark.url, openInNewTab ? "_blank" : "_self");
+            }}
             className="flex items-center gap-2 w-full text-left"
           >
             {/* Favicon — blurred in privacy mode */}
@@ -229,6 +234,7 @@ export function BookmarkItem({
             icon={ExternalLink}
             label="Open in new tab"
             onClick={() => {
+              recordBookmarkVisit(boardId, bookmark.id);
               window.open(bookmark.url, "_blank");
               setContextMenu(null);
             }}
