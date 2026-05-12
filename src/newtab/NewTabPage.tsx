@@ -13,6 +13,7 @@ import { WallpaperPanel } from "../components/Wallpaper/WallpaperPanel";
 import { WallpaperButton } from "../components/Wallpaper/WallpaperButton";
 import { MultiSelectBar } from "../components/MultiSelect/MultiSelectBar";
 import { UpgradePromptModal } from "../components/UpgradePromptModal";
+import { SharePageModal } from "../components/sharing/SharePageModal";
 import { usePlanLimits } from "../hooks/usePlanLimits";
 import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
@@ -21,13 +22,16 @@ import {
   getLockedPageCountForPlan,
   getVisiblePagesForPlan,
 } from "../lib/planLimits";
+import type { Page } from "../types";
 
 export function NewTabPage() {
   const pages = useArcalistStore((state) => state.pages);
+  const user = useArcalistStore((state) => state.user);
   const activePageId = useArcalistStore((state) => state.activePageId);
   const setActivePage = useArcalistStore((state) => state.setActivePage);
   const addPage = useArcalistStore((state) => state.addPage);
   const deletePage = useArcalistStore((state) => state.deletePage);
+  const renamePage = useArcalistStore((state) => state.renamePage);
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
   const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
   const planLimits = usePlanLimits();
@@ -47,6 +51,7 @@ export function NewTabPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [smartCollectionsOpen, setSmartCollectionsOpen] = useState(false);
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
+  const [sharePage, setSharePage] = useState<Page | null>(null);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [pageLockNoticeDismissed, setPageLockNoticeDismissed] = useState(false);
@@ -148,6 +153,19 @@ export function NewTabPage() {
     setAnalyticsOpen(true);
   };
 
+  const handleSharePage = (page: Page) => {
+    if (!planLimits.isProUser) {
+      setUpgradePrompt({
+        title: "Page sharing is available with Arcalist Pro.",
+        description:
+          "Upgrade to Pro to generate read-only share links for individual Arcalist pages.",
+        featureName: "Page Sharing",
+      });
+      return;
+    }
+    setSharePage(page);
+  };
+
   const handleBookmarkSelect = (bookmarkId: string, boardId: string) => {
     setSelectedBookmarks((prev) => {
       const exists = prev.find((b) => b.id === bookmarkId);
@@ -205,6 +223,9 @@ export function NewTabPage() {
             onPageChange={setActivePage}
             onAddPage={addPage}
             onDeletePage={deletePage}
+            onRenamePage={renamePage}
+            onSharePage={handleSharePage}
+            shareLocked={!planLimits.isProUser}
             lockedPageCount={lockedPageCount}
             onPageLimitReached={showPageUpgradePrompt}
           />
@@ -288,6 +309,12 @@ export function NewTabPage() {
       <ProductivityAnalyticsPanel
         open={analyticsOpen && planLimits.isProUser}
         onClose={() => setAnalyticsOpen(false)}
+      />
+      <SharePageModal
+        open={Boolean(sharePage)}
+        page={sharePage}
+        userId={user?.id ?? null}
+        onClose={() => setSharePage(null)}
       />
       <SettingsPanel
         open={settingsOpen}

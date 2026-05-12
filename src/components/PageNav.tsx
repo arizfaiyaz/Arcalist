@@ -1,5 +1,14 @@
-import { useState } from "react";
-import { Plus, LogIn, Loader2, Trash2, Lock } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  ChevronDown,
+  Lock,
+  LogIn,
+  Loader2,
+  Pencil,
+  Plus,
+  Share2,
+  Trash2,
+} from "lucide-react";
 import { cn } from "../lib/utils";
 import { useArcalistStore } from "../store/useArcalistStore";
 import type { Page } from "../types";
@@ -10,6 +19,9 @@ type Props = {
   onPageChange: (id: string) => void;
   onAddPage: (title: string) => boolean;
   onDeletePage: (id: string) => void;
+  onRenamePage: (id: string, title: string) => void;
+  onSharePage: (page: Page) => void;
+  shareLocked?: boolean;
   lockedPageCount?: number;
   onPageLimitReached?: () => void;
 };
@@ -20,11 +32,16 @@ export function PageNav({
   onPageChange,
   onAddPage,
   onDeletePage,
+  onRenamePage,
+  onSharePage,
+  shareLocked = false,
   lockedPageCount = 0,
   onPageLimitReached,
 }: Props) {
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
+  const [openMenuPageId, setOpenMenuPageId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const user = useArcalistStore((state) => state.user);
   const signInWithGoogle = useArcalistStore((state) => state.signInWithGoogle);
@@ -46,6 +63,24 @@ export function PageNav({
     setAdding(false);
   };
 
+  useEffect(() => {
+    if (!openMenuPageId) return;
+    const handler = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return;
+      setOpenMenuPageId(null);
+    };
+    window.addEventListener("mousedown", handler);
+    return () => window.removeEventListener("mousedown", handler);
+  }, [openMenuPageId]);
+
+  const handleRename = (page: Page) => {
+    const nextTitle = window.prompt("Rename page", page.title)?.trim();
+    if (nextTitle && nextTitle !== page.title) {
+      onRenamePage(page.id, nextTitle);
+    }
+    setOpenMenuPageId(null);
+  };
+
   return (
     <nav
       className={cn(
@@ -61,36 +96,79 @@ export function PageNav({
         {/* Page Tabs */}
         {pages.map((page) => {
           const isActive = page.id === activePageId;
+          const menuOpen = page.id === openMenuPageId;
           return (
-            <div key={page.id} className="flex items-center group">
-              <button
-                onClick={() => onPageChange(page.id)}
+            <div key={page.id} className="relative flex items-center group">
+              <div
                 className={cn(
-                  "px-4 py-1.5 rounded-full text-sm font-medium",
+                  "flex items-center rounded-full text-sm font-medium",
                   "transition-all duration-150",
                   isActive
                     ? "bg-[var(--arc-accent)] text-[var(--arc-accent-foreground)] font-semibold"
                     : "bg-[var(--arc-button-bg)] text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
                 )}
               >
-                {page.title}
-              </button>
-              {pages.length > 1 && (
+                <button
+                  onClick={() => onPageChange(page.id)}
+                  className="min-w-0 max-w-44 truncate py-1.5 pl-4 pr-1 text-left"
+                  title={page.title}
+                >
+                  {page.title}
+                </button>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeletePage(page.id);
+                    setOpenMenuPageId((current) =>
+                      current === page.id ? null : page.id,
+                    );
                   }}
                   className={cn(
-                    "ml-1 w-5 h-5 rounded-md",
-                    "flex items-center justify-center",
-                    "text-[var(--arc-text-secondary)] hover:text-red-400",
-                    "opacity-0 group-hover:opacity-100 transition-opacity",
+                    "mr-1 flex h-6 w-6 items-center justify-center rounded-full",
+                    isActive
+                      ? "hover:bg-black/10"
+                      : "hover:bg-[var(--arc-glass-bg)]",
                   )}
-                  title="Delete page"
+                  title={`${page.title} actions`}
                 >
-                  <Trash2 size={11} />
+                  <ChevronDown size={13} />
                 </button>
+              </div>
+
+              {menuOpen && (
+                <div
+                  ref={menuRef}
+                  className={cn(
+                    "absolute left-0 top-9 z-30 w-44 overflow-hidden rounded-xl",
+                    "border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)]",
+                    "p-1 shadow-xl shadow-black/40",
+                  )}
+                >
+                  <PageMenuItem
+                    icon={Pencil}
+                    label="Rename page"
+                    onClick={() => handleRename(page)}
+                  />
+                  <PageMenuItem
+                    icon={Share2}
+                    label="Share page"
+                    badge={shareLocked ? "Pro" : undefined}
+                    onClick={() => {
+                      setOpenMenuPageId(null);
+                      onSharePage(page);
+                    }}
+                  />
+                  {pages.length > 1 && (
+                    <PageMenuItem
+                      icon={Trash2}
+                      label="Delete page"
+                      danger
+                      onClick={() => {
+                        setOpenMenuPageId(null);
+                        onDeletePage(page.id);
+                      }}
+                    />
+                  )}
+                </div>
               )}
             </div>
           );
@@ -182,5 +260,39 @@ export function PageNav({
         </div>
       </div>
     </nav>
+  );
+}
+
+function PageMenuItem({
+  icon: Icon,
+  label,
+  onClick,
+  badge,
+  danger = false,
+}: {
+  icon: React.ElementType;
+  label: string;
+  onClick: () => void;
+  badge?: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm",
+        danger
+          ? "text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"
+          : "text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]",
+      )}
+    >
+      <Icon size={13} />
+      <span className="min-w-0 flex-1 text-left">{label}</span>
+      {badge && (
+        <span className="rounded-full border border-amber-300/25 px-1.5 py-0.5 text-[9px] text-amber-100/80">
+          {badge}
+        </span>
+      )}
+    </button>
   );
 }

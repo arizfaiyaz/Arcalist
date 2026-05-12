@@ -4,8 +4,10 @@ import "./index.css";
 import { NewTabPage } from "./newtab/NewTabPage";
 import { useArcalistStore } from "./store/useArcalistStore";
 import { OnboardingScreen } from "./components/Onboarding/OnboardingScreen";
+import { SharedPageView } from "./components/sharing/SharedPageView";
 
 function App() {
+  const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)/);
   const initialize = useArcalistStore((state) => state.initialize);
   const user = useArcalistStore((state) => state.user);
   const hydrated = useArcalistStore((state) => state.hydrated);
@@ -39,6 +41,10 @@ function App() {
       }
     };
   }, [initialize]);
+
+  if (shareMatch?.[1]) {
+    return <SharedPageView token={decodeURIComponent(shareMatch[1])} />;
+  }
 
   // Full-screen spinner while we check storage
   if (!hydrated || !authReady) {
