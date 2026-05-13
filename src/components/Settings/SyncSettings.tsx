@@ -73,10 +73,12 @@ export function SyncSettings() {
 
   return (
     <>
-      <div className="rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-glass-bg)] overflow-hidden">
+      <div className="arc-glass-soft overflow-hidden rounded-xl">
         <button
+          type="button"
           onClick={handleToggle}
-          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--arc-button-bg)]"
+          aria-pressed={meta?.enabled ?? false}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-[var(--arc-button-hover-bg)]"
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -99,7 +101,7 @@ export function SyncSettings() {
             <div
               className={cn(
                 "h-6 w-10 shrink-0 rounded-full p-1 transition-colors",
-                meta?.enabled ? "bg-[var(--arc-accent)]" : "bg-surface",
+                meta?.enabled ? "bg-[var(--arc-accent)]" : "bg-[var(--arc-glass-bg)]",
               )}
             >
               <div
@@ -123,6 +125,7 @@ export function SyncSettings() {
               </span>
             </div>
             <button
+              type="button"
               onClick={handleManualSync}
               disabled={busy || !meta?.enabled}
               className={cn(

@@ -114,15 +114,19 @@ export function ImportDialog({ open, onClose }: Props) {
       <div
         className={cn(
           'relative w-full max-w-md mx-4',
-          'bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl',
-          'shadow-2xl shadow-black/60 p-6'
+          'arc-glass-strong rounded-2xl p-6'
         )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-[var(--arc-text-primary)] font-semibold">Import Bookmarks</h2>
-          <button onClick={handleClose} className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]">
+          <button
+            type="button"
+            onClick={handleClose}
+            aria-label="Close import dialog"
+            className="rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-text-primary)]"
+          >
             <X size={16} />
           </button>
         </div>
@@ -133,25 +137,26 @@ export function ImportDialog({ open, onClose }: Props) {
             <p className="text-[var(--arc-text-secondary)] text-sm mb-4">
               Export your Chrome bookmarks as an HTML file, then upload it here.
               <br />
-              <span className="text-slate-500 text-xs mt-1 block">
+              <span className="mt-1 block text-xs text-[var(--arc-text-secondary)] opacity-80">
                 Chrome → Bookmarks → Bookmark Manager → ⋮ → Export bookmarks
               </span>
             </p>
 
             {/* Drop zone */}
             <button
+              type="button"
               onClick={() => fileRef.current?.click()}
               className={cn(
-                'w-full border-2 border-dashed border-white/10 rounded-xl p-8',
+                'w-full rounded-xl border-2 border-dashed border-[var(--arc-glass-border)] p-8',
                 'flex flex-col items-center gap-3',
-                'hover:border-accent/40 hover:bg-accent/5',
+                'hover:border-[var(--arc-accent)] hover:bg-[var(--arc-button-hover-bg)]',
                 'transition-all duration-200 text-center'
               )}
             >
-              <Upload size={24} className="text-slate-500" />
+              <Upload size={24} className="text-[var(--arc-text-secondary)]" />
               <div>
-                <p className="text-slate-300 text-sm">Click to upload HTML file</p>
-                <p className="text-slate-500 text-xs mt-1">
+                <p className="text-sm text-[var(--arc-text-primary)]">Click to upload HTML file</p>
+                <p className="mt-1 text-xs text-[var(--arc-text-secondary)]">
                   bookmarks_month_year.html
                 </p>
               </div>
@@ -177,7 +182,7 @@ export function ImportDialog({ open, onClose }: Props) {
                 <p className="text-[var(--arc-text-primary)] text-sm font-medium">
                   {parsed.length} bookmarks found
                 </p>
-                <p className="text-slate-500 text-xs">Ready to import</p>
+                <p className="text-xs text-[var(--arc-text-secondary)]">Ready to import</p>
               </div>
             </div>
 
@@ -186,11 +191,11 @@ export function ImportDialog({ open, onClose }: Props) {
               {parsed.slice(0, 5).map((bm, i) => (
                 <div key={i} className="flex items-center gap-2 px-2 py-1">
                   <img src={bm.favicon} alt="" className="w-3.5 h-3.5 shrink-0" />
-                  <span className="text-slate-300 text-xs truncate">{bm.title}</span>
+                  <span className="truncate text-xs text-[var(--arc-text-primary)]">{bm.title}</span>
                 </div>
               ))}
               {parsed.length > 5 && (
-                <p className="text-slate-500 text-xs px-2 mt-1">
+                <p className="mt-1 px-2 text-xs text-[var(--arc-text-secondary)]">
                   + {parsed.length - 5} more
                 </p>
               )}
@@ -198,16 +203,14 @@ export function ImportDialog({ open, onClose }: Props) {
 
             {/* Board selector */}
             <div className="mb-5">
-              <label className="text-slate-400 text-xs block mb-1.5">
+              <label className="mb-1.5 block text-xs text-[var(--arc-text-secondary)]">
                 Import into board
               </label>
               <select
                 value={targetBoardId}
                 onChange={(e) => setTargetBoardId(e.target.value)}
                 className={cn(
-                  'w-full bg-[var(--arc-button-bg)] text-[var(--arc-text-primary)] text-sm',
-                  'border border-[var(--arc-glass-border)] rounded-lg px-3 py-2',
-                  'outline-none focus:border-[var(--arc-accent)]'
+                  'arc-input w-full px-3 py-2 text-sm'
                 )}
               >
                 {allBoards.map((b) => (
@@ -221,19 +224,21 @@ export function ImportDialog({ open, onClose }: Props) {
             {/* Actions */}
             <div className="flex gap-2">
               <button
+                type="button"
                 onClick={() => setStep('upload')}
-                className="flex-1 py-2 rounded-lg text-sm text-slate-400 hover:text-white bg-surface-2 hover:bg-white/10 transition-colors"
+                className="arc-btn arc-btn-secondary flex-1"
               >
                 Back
               </button>
               <button
+                type="button"
                 onClick={handleImport}
                 disabled={done}
                 className={cn(
-                  'flex-1 py-2 rounded-lg text-sm font-medium transition-all',
+                  'arc-btn flex-1 transition-all',
                   done
-                    ? 'bg-accent/20 text-accent'
-                    : 'bg-accent text-background hover:bg-accent-hover'
+                    ? 'arc-btn-secondary text-[var(--arc-accent)]'
+                    : 'arc-btn-primary'
                 )}
               >
                 {done ? (

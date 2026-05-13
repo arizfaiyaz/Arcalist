@@ -100,8 +100,7 @@ export function SearchOverlay({ open, onClose }: Props) {
       <div
         className={cn(
           'relative w-full max-w-xl mx-4',
-          'bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl',
-          'shadow-2xl shadow-black/60',
+          'arc-glass-strong rounded-2xl',
           'overflow-hidden'
         )}
         onClick={(e) => e.stopPropagation()} // prevent closing when clicking inside
@@ -120,7 +119,12 @@ export function SearchOverlay({ open, onClose }: Props) {
             )}
           />
           {query && (
-            <button onClick={() => setQuery('')} className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]">
+            <button
+              type="button"
+              onClick={() => setQuery('')}
+              aria-label="Clear search"
+              className="rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-text-primary)]"
+            >
               <X size={14} />
             </button>
           )}
@@ -183,6 +187,7 @@ function SearchResult({
 
   return (
     <button
+      type="button"
       onClick={handleClick}
       className={cn(
         'w-full flex items-center gap-3 px-4 py-2.5',

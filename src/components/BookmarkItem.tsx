@@ -105,17 +105,19 @@ export function BookmarkItem({
         className={cn(
           "group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
           "hover:bg-[var(--arc-button-bg)] transition-colors duration-150",
-          isSelected && "bg-accent/10 border border-accent/20",
+          isSelected && "border border-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]",
         )}
       >
         {/* Checkbox in multi-select mode, grip handle otherwise */}
         {multiSelectMode ? (
           <button
+            type="button"
             onClick={() => onSelect?.(bookmark.id)}
+            aria-label={isSelected ? "Deselect bookmark" : "Select bookmark"}
             className={cn(
-              "w-4 h-4 rounded border-2 shrink-0 flex items-center justify-center transition-all",
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-all",
               isSelected
-                ? "bg-accent border-accent"
+                ? "border-[var(--arc-accent)] bg-[var(--arc-accent)] text-[var(--arc-accent-foreground)]"
                 : "border-[var(--arc-text-secondary)] hover:border-[var(--arc-accent)]",
             )}
           >
@@ -135,9 +137,11 @@ export function BookmarkItem({
           <button
             {...attributes}
             {...listeners}
+            type="button"
+            aria-label={`Reorder ${bookmark.title}`}
             className={cn(
-              "opacity-0 group-hover:opacity-100 transition-opacity shrink-0",
-              "text-[var(--arc-text-secondary)] opacity-60 hover:opacity-100 cursor-grab active:cursor-grabbing touch-none",
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-0 group-hover:opacity-100 transition-opacity",
+              "text-[var(--arc-text-secondary)] opacity-60 hover:bg-[var(--arc-button-hover-bg)] hover:opacity-100 cursor-grab active:cursor-grabbing touch-none",
             )}
           >
             <GripVertical size={12} />
@@ -147,6 +151,7 @@ export function BookmarkItem({
         {/* Clickable link */}
         <div className="flex-1 min-w-0">
           <button
+            type="button"
             onClick={() => {
               if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
                 recordBookmarkVisit(boardId, bookmark.id);
@@ -169,7 +174,7 @@ export function BookmarkItem({
                   onError={() => setImgError(true)}
                 />
               ) : (
-                <div className="w-4 h-4 rounded-sm bg-surface-2 flex items-center justify-center">
+                <div className="flex h-4 w-4 items-center justify-center rounded-sm bg-[var(--arc-button-bg)]">
                   <span className="text-[8px] text-[var(--arc-text-secondary)] font-bold uppercase">
                     {bookmark.title.charAt(0)}
                   </span>
@@ -200,22 +205,26 @@ export function BookmarkItem({
 
         {/* Trash button */}
         <button
+          type="button"
           onClick={() => setEditOpen(true)}
+          aria-label={`Edit ${bookmark.title}`}
           className={cn(
             "opacity-0 group-hover:opacity-100 transition-opacity",
-            "w-4 h-4 flex items-center justify-center shrink-0",
-            "text-[var(--arc-text-secondary)] opacity-60 hover:text-[var(--arc-accent)] hover:opacity-100",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+            "text-[var(--arc-text-secondary)] opacity-60 hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)] hover:opacity-100",
           )}
           title="Edit bookmark"
         >
           <Pencil size={10} />
         </button>
         <button
+          type="button"
           onClick={handleTrash}
+          aria-label={`Move ${bookmark.title} to trash`}
           className={cn(
             "opacity-0 group-hover:opacity-100 transition-opacity",
-            "w-4 h-4 flex items-center justify-center shrink-0",
-            "text-[var(--arc-text-secondary)] opacity-60 hover:text-red-400 hover:opacity-100",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+            "text-[var(--arc-text-secondary)] opacity-60 hover:bg-red-400/10 hover:text-red-400 hover:opacity-100",
           )}
         >
           <Trash2 size={10} />
@@ -229,8 +238,7 @@ export function BookmarkItem({
           style={{ top: contextMenu.y, left: contextMenu.x }}
           className={cn(
             "fixed z-50 min-w-44",
-            "bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-xl",
-            "shadow-xl shadow-black/40 py-1",
+            "arc-menu rounded-xl py-1",
             "overflow-hidden",
           )}
         >
@@ -286,15 +294,12 @@ function ContextMenuItem({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-2.5 px-3 py-2 text-sm",
-        "transition-colors duration-100",
-        danger && "text-[var(--arc-text-secondary)] hover:text-red-400 hover:bg-red-400/5",
-        accent && "text-[var(--arc-text-secondary)] hover:text-[var(--arc-accent)] hover:bg-accent/5",
-        !danger &&
-          !accent &&
-          "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]",
+        "arc-menu-item",
+        danger && "hover:text-red-400 hover:bg-red-400/10",
+        accent && "hover:text-[var(--arc-accent)]",
       )}
     >
       <Icon size={13} />

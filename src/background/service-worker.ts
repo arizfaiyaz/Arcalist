@@ -9,6 +9,10 @@ import {
   handleAutoSyncAlarm,
 } from "../lib/autoSync";
 import { getPlanStatus, markDirty } from "../lib/sync/syncStorage";
+import {
+  getStoredAuthState,
+  getWorkspaceStorageKey,
+} from "../lib/storage";
 import { FREE_PLAN } from "../config/plans";
 import { getSafeDomain, normalizeSafeUrl } from "../lib/urlSafety";
 import { getDomainFromUrl, getFaviconForDomain } from "../lib/domain";
@@ -25,7 +29,6 @@ import {
 } from "../lib/productivityAnalytics";
 import type { ArcalistState, Board, Page } from "../types";
 
-const STORAGE_KEY = "arcalist_state";
 const ANALYTICS_ALARM_NAME = "arcalist-analytics-flush";
 const ANALYTICS_IDLE_THRESHOLD_SECONDS = 60;
 const MIN_TRACKED_MS = 1000;
@@ -58,13 +61,21 @@ function getHostname(url: string): string | null {
   return getSafeDomain(url);
 }
 
-async function getState(): Promise<ArcalistState | null> {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
-  return (result[STORAGE_KEY] as ArcalistState) ?? null;
+async function getState(): Promise<{ state: ArcalistState; userId: string } | null> {
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || !authState.userId) return null;
+  const storageKey = getWorkspaceStorageKey(authState.userId);
+  const result = await chrome.storage.local.get(storageKey);
+  const state = result[storageKey] as ArcalistState | undefined;
+  return state ? { state, userId: authState.userId } : null;
 }
 
-async function saveState(state: object) {
-  await chrome.storage.local.set({ [STORAGE_KEY]: state });
+async function saveState(state: object, userId: string) {
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || authState.userId !== userId) return;
+  await chrome.storage.local.set({
+    [getWorkspaceStorageKey(userId)]: state,
+  });
   await markDirty();
 }
 
@@ -100,6 +111,13 @@ async function getAnalyticsPlanStatus(): Promise<AnalyticsPlanStatus> {
 }
 
 async function canTrackAnalytics() {
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || !authState.userId) {
+    return {
+      allowed: false,
+      analytics: createDefaultAnalyticsState(),
+    };
+  }
   const [analytics, plan] = await Promise.all([
     getAnalyticsState(),
     getAnalyticsPlanStatus(),
@@ -121,6 +139,8 @@ async function flushActiveSession() {
 
   const elapsedMs = Date.now() - session.startedAt;
   if (elapsedMs < MIN_TRACKED_MS) return;
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || !authState.userId) return;
 
   const [analytics, plan] = await Promise.all([
     getAnalyticsState(),
@@ -235,16 +255,19 @@ function initializeAnalyticsTracking() {
 // ─── Install ─────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-
-  // On a fresh install pull in all existing Chrome bookmarks so the user
-  // sees their bookmarks immediately without any manual import step.
-  if (details.reason === "install") {
-    await importChromeBookmarks();
-  }
+  const authState = await getStoredAuthState();
 
   // Initialize auto-sync on install or update
   await initializeAutoSync();
   initializeAnalyticsTracking();
+
+  if (
+    details.reason === "install" &&
+    authState.isAuthenticated &&
+    authState.userId
+  ) {
+    await importChromeBookmarks(undefined, authState.userId);
+  }
 });
 
 chrome.runtime.onStartup?.addListener(() => {
@@ -302,6 +325,19 @@ chrome.runtime.onMessage.addListener(
     void (async () => {
       try {
         const analyticsMessage = message as AnalyticsMessage;
+        const authState = await getStoredAuthState();
+        if (
+          analyticsMessage.type !== "ANALYTICS_SET_PLAN_STATUS" &&
+          (!authState.isAuthenticated || !authState.userId)
+        ) {
+          activeSession = null;
+          sendResponse({
+            ok: false,
+            stats: createDefaultAnalyticsState(),
+            error: "Sign in to Arcalist to use analytics.",
+          });
+          return;
+        }
 
         if (analyticsMessage.type === "ANALYTICS_FLUSH_ACTIVE_SESSION") {
           await flushAndRestartActiveSession();
@@ -400,8 +436,9 @@ chrome.commands.onCommand.addListener(async (command) => {
   const domain = getHostname(safeUrl);
   if (!domain) return;
 
-  const state = await getState();
-  if (!state) return;
+  const loaded = await getState();
+  if (!loaded) return;
+  const { state, userId } = loaded;
 
   const firstPage = state.pages?.[0];
   if (!firstPage) return;
@@ -431,7 +468,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   });
   state.updatedAt = Date.now();
 
-  await saveState(state);
+  await saveState(state, userId);
 
   chrome.runtime.sendMessage({ type: "QUICK_SAVE_DONE" }).catch(() => {});
 });
@@ -440,8 +477,9 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 // Fires when user creates a bookmark OR a folder in Chrome
 chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
-  const state = await getState();
-  if (!state || !state.pages?.length) return;
+  const loaded = await getState();
+  if (!loaded || !loaded.state.pages?.length) return;
+  const { state, userId } = loaded;
 
   const isFolder = !bookmark.url;
 
@@ -462,7 +500,7 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
     firstPage.boards = firstPage.boards ?? [];
     firstPage.boards.push(newBoard);
 
-    await saveState(state);
+    await saveState(state, userId);
 
     // Remember the mapping so we know where to put bookmarks later
     await addMapping(id, newBoard.id);
@@ -509,7 +547,7 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
 
     if (added) {
       state.updatedAt = Date.now();
-      await saveState(state);
+      await saveState(state, userId);
       notifyNewTab();
     }
   }
@@ -522,8 +560,9 @@ chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
 
   if (!boardId) return; // Not a tracked folder
 
-  const state = await getState();
-  if (!state) return;
+  const loaded = await getState();
+  if (!loaded) return;
+  const { state, userId } = loaded;
 
   // Rename the matching board
   for (const page of state.pages) {
@@ -535,7 +574,7 @@ chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
     }
   }
 
-  await saveState(state);
+  await saveState(state, userId);
   notifyNewTab();
 });
 
@@ -546,8 +585,9 @@ chrome.bookmarks.onRemoved.addListener(async (id) => {
 
   if (!boardId) return; // Not a tracked folder — ignore
 
-  const state = await getState();
-  if (!state) return;
+  const loaded = await getState();
+  if (!loaded) return;
+  const { state, userId } = loaded;
 
   // Move the matching board's bookmarks to trash before removing the board.
   const trashedItems = [];
@@ -565,7 +605,7 @@ chrome.bookmarks.onRemoved.addListener(async (id) => {
   state.trash = [...(state.trash ?? []), ...trashedItems];
   state.updatedAt = Date.now();
 
-  await saveState(state);
+  await saveState(state, userId);
   await removeMapping(id);
   notifyNewTab();
 });

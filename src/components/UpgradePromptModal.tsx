@@ -25,14 +25,13 @@ export function UpgradePromptModal({
       <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
       <div
         className={cn(
-          "relative w-full max-w-sm rounded-2xl border border-white/10",
-          "bg-[var(--arc-modal-bg)] p-5 shadow-2xl shadow-black/60",
+          "arc-glass-strong relative w-full max-w-sm rounded-2xl p-5",
         )}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-accent/30 bg-accent/10 text-accent">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--arc-accent)]/30 bg-[var(--arc-button-active-bg)] text-[var(--arc-accent)]">
               <Lock size={16} />
             </div>
             <div>
@@ -43,6 +42,7 @@ export function UpgradePromptModal({
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             className="rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
             title="Close"
@@ -57,14 +57,16 @@ export function UpgradePromptModal({
 
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
+            type="button"
             onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
+            className="arc-btn arc-btn-ghost"
           >
             Not now
           </button>
           <button
+            type="button"
             onClick={() => setCheckoutComingSoon(true)}
-            className="rounded-lg bg-[var(--arc-accent)] px-3 py-2 text-sm font-semibold text-[var(--arc-accent-foreground)] hover:bg-accent-hover"
+            className="arc-btn arc-btn-primary"
           >
             Upgrade to Pro
           </button>

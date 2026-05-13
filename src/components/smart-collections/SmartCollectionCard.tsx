@@ -41,13 +41,14 @@ export function SmartCollectionCard({
 
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
         "w-full rounded-lg border p-3 text-left transition-colors",
         "bg-[var(--arc-button-bg)]",
         selected
           ? "border-[var(--arc-accent)]"
-          : "border-[var(--arc-glass-border)] hover:border-[var(--arc-accent)]",
+          : "border-[var(--arc-glass-border)] hover:border-[var(--arc-accent)] hover:bg-[var(--arc-button-hover-bg)]",
       )}
     >
       <div className="flex items-start gap-3">

@@ -85,14 +85,12 @@ export function PageNav({
     <nav
       className={cn(
         "py-2.5 px-3",
-        "bg-[var(--arc-nav-bg)] border border-[var(--arc-glass-border)]",
-        "rounded-2xl shadow-lg shadow-black/20",
-        "backdrop-blur-lg",
+        "arc-glass-strong rounded-2xl",
         // Stick to top
         "sticky top-0 z-10",
       )}
     >
-      <div className="w-full flex items-center gap-1.5">
+      <div className="w-full flex items-center gap-2 overflow-x-auto">
         {/* Page Tabs */}
         {pages.map((page) => {
           const isActive = page.id === activePageId;
@@ -109,6 +107,7 @@ export function PageNav({
                 )}
               >
                 <button
+                  type="button"
                   onClick={() => onPageChange(page.id)}
                   className="min-w-0 max-w-44 truncate py-1.5 pl-4 pr-1 text-left"
                   title={page.title}
@@ -116,6 +115,7 @@ export function PageNav({
                   {page.title}
                 </button>
                 <button
+                  type="button"
                   onClick={(e) => {
                     e.stopPropagation();
                     setOpenMenuPageId((current) =>
@@ -129,6 +129,7 @@ export function PageNav({
                       : "hover:bg-[var(--arc-glass-bg)]",
                   )}
                   title={`${page.title} actions`}
+                  aria-label={`${page.title} actions`}
                 >
                   <ChevronDown size={13} />
                 </button>
@@ -139,8 +140,7 @@ export function PageNav({
                   ref={menuRef}
                   className={cn(
                     "absolute left-0 top-9 z-30 w-44 overflow-hidden rounded-xl",
-                    "border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)]",
-                    "p-1 shadow-xl shadow-black/40",
+                    "arc-menu p-1.5",
                   )}
                 >
                   <PageMenuItem
@@ -176,6 +176,7 @@ export function PageNav({
 
         {lockedPageCount > 0 && (
           <button
+            type="button"
             onClick={onPageLimitReached}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm",
@@ -202,11 +203,10 @@ export function PageNav({
             }}
             onBlur={handleAdd}
             placeholder="Page name.."
+            aria-label="New page name"
             className={cn(
-              "px-3 py-1 rounded-full text-sm",
-              "bg-[var(--arc-button-bg)] text-[var(--arc-text-primary)] border border-[var(--arc-accent)]",
-              "outline-none w-28",
-              "placeholder:text-[var(--arc-text-secondary)]",
+              "arc-input w-32 rounded-full px-3 py-1.5 text-sm",
+              "border-[var(--arc-accent)]",
             )}
           />
         ) : (
@@ -219,10 +219,7 @@ export function PageNav({
               setAdding(true);
             }}
             className={cn(
-              "w-7 h-7 rounded-full flex items-center justify-center",
-              "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
-              "hover:bg-[var(--arc-button-bg)] transition-all duration-150",
-              "border border-[var(--arc-glass-border)] hover:border-[var(--arc-glass-border)]",
+              "arc-icon-btn arc-icon-btn-sm",
               "ml-1",
               !canAddPage && "text-amber-100/70 hover:text-amber-100 hover:border-amber-300/30",
             )}
@@ -230,6 +227,9 @@ export function PageNav({
               canAddPage
                 ? "Add new page"
                 : "Free plan supports up to 3 pages."
+            }
+            aria-label={
+              canAddPage ? "Add new page" : "Free plan supports up to 3 pages."
             }
           >
             <Plus size={14} />
@@ -240,12 +240,11 @@ export function PageNav({
         <div className="ml-auto">
           {!user && (
             <button
+              type="button"
               onClick={signInWithGoogle}
               disabled={signingIn}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs",
-                "bg-accent/15 text-[var(--arc-accent)] border border-[var(--arc-accent)]",
-                "hover:bg-accent/25 transition-all duration-150",
+                "arc-btn arc-btn-primary min-h-8 rounded-full px-3 text-xs",
                 signingIn && "opacity-60 cursor-not-allowed",
               )}
             >
@@ -278,12 +277,13 @@ function PageMenuItem({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm",
+        "arc-menu-item",
         danger
-          ? "text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"
-          : "text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]",
+          ? "hover:bg-red-400/10 hover:text-red-400"
+          : "",
       )}
     >
       <Icon size={13} />

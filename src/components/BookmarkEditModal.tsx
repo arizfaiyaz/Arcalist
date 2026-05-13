@@ -66,66 +66,66 @@ function BookmarkEditForm({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center px-4"
       onClick={onClose}
     >
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
 
       <div
         className={cn(
-          "relative w-full max-w-md mx-4",
-          "bg-surface border border-white/10 rounded-2xl",
-          "shadow-2xl shadow-black/60",
+          "arc-glass-strong relative w-full max-w-md rounded-2xl",
           "overflow-hidden",
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <h2 className="text-white font-semibold text-sm">Edit bookmark</h2>
-          <button onClick={onClose} className="text-slate-500 hover:text-white">
+        <div className="flex items-center justify-between border-b border-[var(--arc-glass-border)] px-5 py-4">
+          <h2 className="text-sm font-semibold text-[var(--arc-text-primary)]">Edit bookmark</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close edit bookmark"
+            className="rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-text-primary)]"
+          >
             <X size={15} />
           </button>
         </div>
 
         <div className="p-5 flex flex-col gap-3">
           <div>
-            <label className="text-[11px] text-slate-500">Title</label>
+            <label className="text-[11px] text-[var(--arc-text-secondary)]">Title</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              aria-label="Bookmark title"
               className={cn(
-                "mt-1 w-full px-3 py-2 rounded-lg text-sm",
-                "bg-surface-2 text-white border border-white/10",
-                "outline-none focus:border-accent/40",
+                "arc-input mt-1 w-full px-3 py-2 text-sm",
               )}
               placeholder="Bookmark name"
             />
           </div>
 
           <div>
-            <label className="text-[11px] text-slate-500">URL</label>
+            <label className="text-[11px] text-[var(--arc-text-secondary)]">URL</label>
             <input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              aria-label="Bookmark URL"
               className={cn(
-                "mt-1 w-full px-3 py-2 rounded-lg text-sm",
-                "bg-surface-2 text-white border border-white/10",
-                "outline-none focus:border-accent/40",
+                "arc-input mt-1 w-full px-3 py-2 text-sm",
               )}
               placeholder="https://example.com"
             />
           </div>
 
           <div>
-            <label className="text-[11px] text-slate-500">Description</label>
+            <label className="text-[11px] text-[var(--arc-text-secondary)]">Description</label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              aria-label="Bookmark description"
               rows={3}
               className={cn(
-                "mt-1 w-full px-3 py-2 rounded-lg text-sm",
-                "bg-surface-2 text-white border border-white/10",
-                "outline-none focus:border-accent/40",
+                "arc-input mt-1 w-full px-3 py-2 text-sm",
                 "resize-none",
               )}
               placeholder="Optional notes"
@@ -136,14 +136,16 @@ function BookmarkEditForm({
 
           <div className="flex items-center justify-end gap-2 mt-1">
             <button
+              type="button"
               onClick={onClose}
-              className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white"
+              className="arc-btn arc-btn-ghost min-h-9 px-3 text-xs"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleSave}
-              className="px-3 py-1.5 rounded-lg text-xs bg-accent text-background hover:bg-accent-hover"
+              className="arc-btn arc-btn-primary min-h-9 px-4 text-xs"
             >
               Save
             </button>

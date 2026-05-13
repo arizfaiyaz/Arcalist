@@ -107,8 +107,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
       <div
         className={cn(
           "relative flex h-[min(820px,calc(100vh-4rem))] w-full max-w-6xl flex-col overflow-hidden rounded-2xl",
-          "border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)]",
-          "shadow-2xl shadow-black/60",
+          "arc-glass-strong",
         )}
         onClick={(event) => event.stopPropagation()}
       >
@@ -129,6 +128,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
 
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={() => setTrackingEnabled(!trackingEnabled)}
               className={cn(
                 "inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm",
@@ -141,6 +141,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
               {trackingEnabled ? "Pause" : "Resume"}
             </button>
             <button
+              type="button"
               onClick={onClose}
               title="Close analytics"
               className="rounded-full p-1.5 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
@@ -155,6 +156,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
             <div className="inline-flex rounded-lg border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] p-1">
               {RANGE_OPTIONS.map((option) => (
                 <button
+                  type="button"
                   key={option.id}
                   onClick={() => setRange(option.id)}
                   className={cn(
@@ -171,6 +173,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
 
             <div className="flex flex-wrap items-center gap-2">
               <button
+                type="button"
                 onClick={() => refreshStats()}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--arc-glass-border)] px-3 py-2 text-sm text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
               >
@@ -178,6 +181,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
                 {loading ? "Refreshing" : "Refresh"}
               </button>
               <button
+                type="button"
                 onClick={exportCsv}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--arc-glass-border)] px-3 py-2 text-sm text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
               >
@@ -185,6 +189,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
                 CSV
               </button>
               <button
+                type="button"
                 onClick={exportJson}
                 className="inline-flex items-center gap-2 rounded-lg border border-[var(--arc-glass-border)] px-3 py-2 text-sm text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
               >
@@ -233,6 +238,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
 
           <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-[var(--arc-glass-border)] pt-4">
             <button
+              type="button"
               onClick={handleClearToday}
               className="inline-flex items-center gap-2 rounded-lg border border-amber-300/25 px-3 py-2 text-sm text-amber-100/80 hover:bg-amber-500/10 hover:text-amber-100"
             >
@@ -240,6 +246,7 @@ export function ProductivityAnalyticsPanel({ open, onClose }: Props) {
               Clear today
             </button>
             <button
+              type="button"
               onClick={handleClearAll}
               className="inline-flex items-center gap-2 rounded-lg border border-red-400/25 px-3 py-2 text-sm text-red-300 hover:bg-red-400/10 hover:text-red-200"
             >

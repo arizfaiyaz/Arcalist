@@ -15,28 +15,29 @@ export function MultiSelectBar({ selectedCount, onDelete, onCancel }: Props) {
       className={cn(
         "fixed bottom-6 left-1/2 -translate-x-1/2 z-50",
         "flex items-center gap-3 px-4 py-3",
-        "bg-surface border border-white/10 rounded-2xl",
-        "shadow-2xl shadow-black/40",
+        "arc-glass-strong rounded-2xl",
       )}
     >
-      <span className="text-slate-300 text-sm">
-        <span className="text-accent font-semibold">{selectedCount}</span>{" "}
+      <span className="text-sm text-[var(--arc-text-primary)]">
+        <span className="font-semibold text-[var(--arc-accent)]">{selectedCount}</span>{" "}
         selected
       </span>
 
-      <div className="w-px h-4 bg-white/10" />
+      <div className="h-4 w-px bg-[var(--arc-glass-border)]" />
 
       <button
+        type="button"
         onClick={onDelete}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-red-400 hover:bg-red-400/10 transition-colors"
+        className="arc-btn arc-btn-danger min-h-9 px-3 text-sm"
       >
         <Trash2 size={13} />
         Delete all
       </button>
 
       <button
+        type="button"
         onClick={onCancel}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-surface-2 transition-colors"
+        className="arc-btn arc-btn-secondary min-h-9 px-3 text-sm"
       >
         <X size={13} />
         Cancel

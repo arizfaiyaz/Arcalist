@@ -1,9 +1,9 @@
 import { setBookmarkMap } from "./chromeBookmarkMap";
 import { markDirty } from "./sync/syncStorage";
+import { getWorkspaceStorageKey } from "./storage";
 import { getSafeDomain, normalizeSafeUrl } from "./urlSafety";
 import type { ArcalistState, Board, Bookmark } from "../types";
 
-const STORAGE_KEY = "arcalist_state";
 const IMPORT_FLAG_KEY = "arcalist_chrome_imported";
 const HOME_PAGE_TITLE = "Home";
 const IMPORTED_PAGE_TITLE = "Imported";
@@ -253,21 +253,25 @@ export async function parseBookmarkTree(
 }
 
 export async function importChromeBookmarks(
-  existingState?: ArcalistState
+  existingState?: ArcalistState,
+  userId?: string,
 ): Promise<ArcalistState | null> {
+  if (!userId) return null;
+  const storageKey = getWorkspaceStorageKey(userId);
+  const importFlagKey = `${IMPORT_FLAG_KEY}:${userId}`;
   const stored = await chrome.storage.local.get([
-    STORAGE_KEY,
-    IMPORT_FLAG_KEY,
+    storageKey,
+    importFlagKey,
   ]);
 
-  const state = (existingState ?? stored[STORAGE_KEY]) as
+  const state = (existingState ?? stored[storageKey]) as
     | ArcalistState
     | undefined;
   if (!state) return null;
 
   const migrated = mergeImportedPageIntoHome(state);
   if (migrated) {
-    await chrome.storage.local.set({ [STORAGE_KEY]: migrated });
+    await chrome.storage.local.set({ [storageKey]: migrated });
     await markDirty();
     return migrated;
   }
@@ -279,26 +283,26 @@ export async function importChromeBookmarks(
         0,
       )
     : 0;
-  const forceReimport = Boolean(stored[IMPORT_FLAG_KEY]) && importedCount === 0;
+  const forceReimport = Boolean(stored[importFlagKey]) && importedCount === 0;
 
-  if (stored[IMPORT_FLAG_KEY] && !forceReimport) return null;
+  if (stored[importFlagKey] && !forceReimport) return null;
 
   const tree = await chrome.bookmarks.getTree();
   const root = tree[0];
   if (!root?.children) {
-    await chrome.storage.local.set({ [IMPORT_FLAG_KEY]: true });
+    await chrome.storage.local.set({ [importFlagKey]: true });
     return null;
   }
 
   const parsed = await parseBookmarkTree(root, state, forceReimport);
   if (!parsed) {
-    await chrome.storage.local.set({ [IMPORT_FLAG_KEY]: true });
+    await chrome.storage.local.set({ [importFlagKey]: true });
     return null;
   }
 
   await chrome.storage.local.set({
-    [STORAGE_KEY]: parsed.state,
-    [IMPORT_FLAG_KEY]: true,
+    [storageKey]: parsed.state,
+    [importFlagKey]: true,
   });
   await markDirty();
   await setBookmarkMap(parsed.map);

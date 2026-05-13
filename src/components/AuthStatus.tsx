@@ -9,18 +9,20 @@ export function AuthStatus() {
   const signOut = useArcalistStore((state) => state.signOut);
   const signingIn = useArcalistStore((state) => state.signingIn);
   const signInError = useArcalistStore((state) => state.signInError);
+  const handleSignOut = () => {
+    if (!window.confirm("Sign out of Arcalist?")) return;
+    void signOut();
+  };
 
   if (!user) {
     return (
       <div className="flex flex-col items-end gap-1">
         <button
+          type="button"
           onClick={signInWithGoogle}
           disabled={signingIn}
           className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-full text-sm",
-            "bg-surface-2 text-slate-400 hover:text-white",
-            "border border-white/10 hover:border-accent/30",
-            "transition-all duration-150",
+            "arc-btn arc-btn-secondary min-h-8 rounded-full px-3 text-sm",
             signingIn && "opacity-60 cursor-not-allowed",
           )}
         >
@@ -59,7 +61,7 @@ export function AuthStatus() {
         }
       >
         {syncStatus === "syncing" ? (
-          <Loader2 size={14} className="text-accent animate-spin" />
+          <Loader2 size={14} className="animate-spin text-[var(--arc-accent)]" />
         ) : syncStatus === "error" || syncStatus === "offline" ? (
           <CloudOff
             size={14}
@@ -70,8 +72,8 @@ export function AuthStatus() {
             size={14}
             className={cn(
               syncStatus === "synced" || syncStatus === "conflict"
-                ? "text-accent"
-                : "text-slate-500",
+                ? "text-[var(--arc-accent)]"
+                : "text-[var(--arc-text-secondary)]",
             )}
           />
         )}
@@ -83,19 +85,21 @@ export function AuthStatus() {
           <img
             src={user.user_metadata.avatar_url}
             alt=""
-            className="w-6 h-6 rounded-full border border-white/10"
+            className="h-6 w-6 rounded-full border border-[var(--arc-glass-border)]"
           />
         )}
-        <span className="text-slate-400 text-xs hidden sm:block">
+        <span className="hidden text-xs text-[var(--arc-text-secondary)] sm:block">
           {user.email}
         </span>
       </div>
 
       {/* Sign out */}
       <button
-        onClick={signOut}
+        type="button"
+        onClick={handleSignOut}
         title="Sign out"
-        className="text-slate-500 hover:text-red-400 transition-colors"
+        aria-label="Sign out"
+        className="text-[var(--arc-text-secondary)] transition-colors hover:text-red-400"
       >
         <LogOut size={13} />
       </button>

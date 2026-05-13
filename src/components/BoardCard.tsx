@@ -100,13 +100,12 @@ export function BoardCard({
       ref={setRef}
       style={style}
       className={cn(
-        "bg-[var(--arc-glass-bg)] rounded-xl h-fit",
-        compactMode ? "p-2" : "p-3",
-        "border border-[var(--arc-glass-border)] transition-colors duration-200",
-        "shadow-[var(--arc-glass-shadow)] backdrop-blur-[var(--arc-glass-blur)]",
+        "arc-glass-soft rounded-xl h-fit",
+        compactMode ? "p-3" : "p-4",
+        "transition-colors duration-200",
         "hover:border-[var(--arc-glass-border)]",
         // Highlight when a bookmark is dragged over this board
-        isOver && "border-accent/40 bg-accent/5",
+        isOver && "border-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]",
       )}
     >
       {/* Board Header */}
@@ -116,10 +115,12 @@ export function BoardCard({
           <button
             {...attributes}
             {...listeners}
+            type="button"
+            aria-label={`Reorder ${board.title}`}
             className={cn(
-              "opacity-0 group-hover:opacity-100 transition-opacity",
+              "flex h-8 w-8 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity",
               "text-[var(--arc-text-secondary)] opacity-60 hover:opacity-100",
-              "cursor-grab active:cursor-grabbing touch-none",
+              "cursor-grab active:cursor-grabbing touch-none hover:bg-[var(--arc-button-hover-bg)]",
             )}
           >
             <GripVertical size={12} />
@@ -137,14 +138,18 @@ export function BoardCard({
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
+            type="button"
             onClick={() => setAdding(true)}
-            className="w-5 h-5 rounded-md flex items-center justify-center text-[var(--arc-text-secondary)] hover:text-[var(--arc-accent)] hover:bg-[var(--arc-button-bg)]"
+            aria-label={`Add bookmark to ${board.title}`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)]"
           >
             <Plus size={12} />
           </button>
           <button
+            type="button"
             onClick={() => deleteBoard(pageId, board.id)}
-            className="w-5 h-5 rounded-md flex items-center justify-center text-[var(--arc-text-secondary)] hover:text-red-400 hover:bg-[var(--arc-button-bg)]"
+            aria-label={`Delete ${board.title}`}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"
           >
             <Trash2 size={12} />
           </button>
@@ -158,7 +163,7 @@ export function BoardCard({
         items={bookmarkIds}
         strategy={verticalListSortingStrategy}
       >
-        <div className={cn("flex flex-col min-h-8px", compactMode ? "gap-0" : "gap-0.5")}>
+        <div className={cn("flex min-h-8 flex-col", compactMode ? "gap-0.5" : "gap-1")}>
           {visibleBookmarks.map((bookmark) => (
             <BookmarkItem
               key={bookmark.id}
@@ -174,6 +179,7 @@ export function BoardCard({
 
       {shouldTruncate && (
         <button
+          type="button"
           onClick={() => setShowAll((v) => !v)}
           className={cn(
             "mt-2 w-full text-xs text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
@@ -198,10 +204,10 @@ export function BoardCard({
           }}
           onBlur={handleAddBookmark}
           placeholder="Paste URL..."
+          aria-label={`Add bookmark URL to ${board.title}`}
           className={cn(
             "w-full mt-2 px-2.5 py-1.5 rounded-lg text-sm",
-            "bg-[var(--arc-button-bg)] text-[var(--arc-text-primary)] border border-[var(--arc-accent)]",
-            "outline-none placeholder:text-[var(--arc-text-secondary)]",
+            "arc-input border-[var(--arc-accent)]",
           )}
         />
       )}

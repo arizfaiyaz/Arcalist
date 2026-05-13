@@ -14,19 +14,18 @@ export function WallpaperButton({
 }: Props) {
   const baseClass =
     layout === "rail"
-      ? "w-10 h-10 rounded-full flex items-center justify-center"
-      : "fixed bottom-4 z-40 workspace-edge-left w-10 h-10 rounded-full flex items-center justify-center";
+      ? ""
+      : "fixed bottom-4 z-40 workspace-edge-left";
 
   return (
     <button
+      type="button"
       onClick={onClick}
       title="Style and wallpaper"
+      aria-label="Style and wallpaper"
       className={cn(
         baseClass,
-        "bg-[var(--arc-nav-bg)] border border-[var(--arc-glass-border)]",
-        "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
-        "hover:border-[var(--arc-accent)] backdrop-blur-sm",
-        "transition-all duration-150 shadow-lg shadow-black/20",
+        "arc-icon-btn",
         className,
       )}
     >

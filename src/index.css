@@ -1,5 +1,5 @@
-@import "tailwindcss";
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
 
 @theme {
     /* Brand colors — use these as: bg-background, text-accent, etc. */
@@ -42,6 +42,16 @@
         --arc-text-secondary: var(--text-secondary);
         --arc-button-bg: var(--color-surface-2);
         --arc-button-text: var(--text-primary);
+        --arc-button-hover-bg: var(--color-surface);
+        --arc-button-active-bg: var(--color-surface);
+        --arc-button-border: var(--glass-border);
+        --arc-surface-soft: var(--arc-glass-bg);
+        --arc-surface-strong: var(--arc-modal-bg);
+        --arc-dropdown-bg: var(--arc-modal-bg);
+        --arc-dropdown-border: var(--arc-glass-border);
+        --arc-actionbar-bg: var(--arc-modal-bg);
+        --arc-actionbar-border: var(--arc-glass-border);
+        --arc-focus-ring: var(--arc-accent);
         --arc-nav-bg: var(--color-surface);
         --arc-modal-bg: var(--color-surface);
         --arc-overlay: var(--wallpaper-overlay);
@@ -153,6 +163,212 @@
     backdrop-filter: blur(var(--arc-glass-blur));
     -webkit-backdrop-filter: blur(var(--arc-glass-blur));
     box-shadow: var(--arc-glass-shadow);
+}
+
+.arc-glass-soft {
+    background: var(--arc-surface-soft);
+    border: 1px solid var(--arc-glass-border);
+    backdrop-filter: blur(var(--arc-glass-blur));
+    -webkit-backdrop-filter: blur(var(--arc-glass-blur));
+    box-shadow: var(--arc-glass-shadow);
+}
+
+.arc-glass-strong {
+    background: var(--arc-surface-strong);
+    border: 1px solid var(--arc-glass-border);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+.arc-glass-interactive {
+    background: var(--arc-button-bg);
+    border: 1px solid var(--arc-button-border);
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        transform 160ms ease,
+        opacity 160ms ease;
+}
+
+.arc-glass-interactive:hover {
+    background: var(--arc-button-hover-bg);
+    border-color: var(--arc-accent);
+}
+
+.arc-focusable:focus-visible,
+.arc-btn:focus-visible,
+.arc-icon-btn:focus-visible,
+.arc-input:focus-visible,
+.arc-menu-item:focus-visible {
+    outline: 2px solid var(--arc-focus-ring);
+    outline-offset: 2px;
+}
+
+.arc-btn {
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 0.75rem;
+    padding: 0 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        opacity 160ms ease,
+        transform 160ms ease;
+}
+
+.arc-btn:active,
+.arc-icon-btn:active {
+    transform: translateY(1px);
+}
+
+.arc-btn:disabled,
+.arc-icon-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.arc-btn-primary {
+    background: var(--arc-accent);
+    color: var(--arc-accent-foreground);
+    border: 1px solid color-mix(in srgb, var(--arc-accent) 78%, transparent);
+}
+
+.arc-btn-primary:hover {
+    background: var(--color-accent-hover);
+}
+
+.arc-btn-secondary {
+    background: var(--arc-button-bg);
+    color: var(--arc-text-primary);
+    border: 1px solid var(--arc-button-border);
+}
+
+.arc-btn-secondary:hover {
+    background: var(--arc-button-hover-bg);
+    border-color: var(--arc-accent);
+}
+
+.arc-btn-ghost {
+    background: transparent;
+    color: var(--arc-text-secondary);
+    border: 1px solid transparent;
+}
+
+.arc-btn-ghost:hover {
+    background: var(--arc-button-hover-bg);
+    color: var(--arc-text-primary);
+}
+
+.arc-btn-danger {
+    background: rgba(248, 113, 113, 0.10);
+    color: #fca5a5;
+    border: 1px solid rgba(248, 113, 113, 0.28);
+}
+
+.arc-btn-danger:hover {
+    background: rgba(248, 113, 113, 0.16);
+    color: #fecaca;
+}
+
+.arc-btn-locked {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fde68a;
+    border: 1px solid rgba(252, 211, 77, 0.28);
+}
+
+.arc-btn-locked:hover {
+    background: rgba(245, 158, 11, 0.18);
+    color: #fef3c7;
+}
+
+.arc-icon-btn {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    color: var(--arc-text-secondary);
+    background: var(--arc-button-bg);
+    border: 1px solid var(--arc-button-border);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.20);
+    transition:
+        background 160ms ease,
+        border-color 160ms ease,
+        color 160ms ease,
+        transform 160ms ease,
+        opacity 160ms ease;
+}
+
+.arc-icon-btn:hover {
+    color: var(--arc-text-primary);
+    background: var(--arc-button-hover-bg);
+    border-color: var(--arc-accent);
+}
+
+.arc-icon-btn-sm {
+    min-width: 2rem;
+    min-height: 2rem;
+}
+
+.arc-menu {
+    background: var(--arc-dropdown-bg);
+    border: 1px solid var(--arc-dropdown-border);
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.38);
+}
+
+.arc-menu-item {
+    min-height: 2.25rem;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    border-radius: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    color: var(--arc-text-secondary);
+    font-size: 0.875rem;
+    transition:
+        background 140ms ease,
+        color 140ms ease;
+}
+
+.arc-menu-item:hover {
+    background: var(--arc-button-hover-bg);
+    color: var(--arc-text-primary);
+}
+
+.arc-input {
+    background: var(--arc-button-bg);
+    color: var(--arc-text-primary);
+    border: 1px solid var(--arc-button-border);
+    border-radius: 0.75rem;
+    outline: none;
+}
+
+.arc-input::placeholder {
+    color: var(--arc-text-secondary);
+}
+
+.arc-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    color: var(--arc-text-secondary);
+    text-align: center;
 }
 
 .arc-text-primary {

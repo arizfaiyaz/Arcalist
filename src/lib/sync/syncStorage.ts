@@ -1,4 +1,8 @@
 import { browserApi } from "../browserApi";
+import {
+  ACTIVE_USER_STORAGE_KEY,
+  getWorkspaceStorageKey,
+} from "../storage";
 import type { ArcalistState } from "../../types";
 import type { SyncMeta, SyncPlanStatus } from "../../types/sync";
 
@@ -55,15 +59,25 @@ export async function markDirty(): Promise<SyncMeta> {
   });
 }
 
-export async function loadLocalWorkspace(): Promise<ArcalistState | null> {
-  const result = await browserApi.storage.get<Record<string, ArcalistState | undefined>>(
-    WORKSPACE_STORAGE_KEY,
+async function getActiveUserId(): Promise<string | null> {
+  const result = await browserApi.storage.get<Record<string, string | undefined>>(
+    ACTIVE_USER_STORAGE_KEY,
   );
-  return result[WORKSPACE_STORAGE_KEY] ?? null;
+  return result[ACTIVE_USER_STORAGE_KEY] ?? null;
+}
+
+export async function loadLocalWorkspace(): Promise<ArcalistState | null> {
+  const userId = await getActiveUserId();
+  if (!userId) return null;
+  const key = getWorkspaceStorageKey(userId);
+  const result = await browserApi.storage.get<Record<string, ArcalistState | undefined>>(key);
+  return result[key] ?? null;
 }
 
 export async function saveLocalWorkspace(state: ArcalistState): Promise<void> {
-  await browserApi.storage.set({ [WORKSPACE_STORAGE_KEY]: state });
+  const userId = await getActiveUserId();
+  if (!userId) return;
+  await browserApi.storage.set({ [getWorkspaceStorageKey(userId)]: state });
 }
 
 export async function createWorkspaceBackup(

@@ -183,9 +183,13 @@ export function BoardGrid({
 
   if (page.boards.length === 0 && !adding) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center gap-4">
-        <p className="text-slate-500 text-sm">No boards yet</p>
+      <div className="arc-empty-state flex-1 py-24">
+        <p className="text-sm font-semibold text-[var(--arc-text-primary)]">No boards yet</p>
+        <p className="max-w-xs text-sm text-[var(--arc-text-secondary)]">
+          Create a board to start grouping bookmarks on this page.
+        </p>
         <button
+          type="button"
           onClick={() => {
             if (!canAddBoard) {
               onBoardLimitReached?.();
@@ -194,12 +198,10 @@ export function BoardGrid({
             setAdding(true);
           }}
           className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-lg",
-            "bg-surface-2 text-slate-400 border border-white/10",
-            "transition-all duration-150 text-sm",
+            "arc-btn",
             canAddBoard
-              ? "hover:text-white hover:border-accent/30"
-              : "border-amber-300/25 text-amber-100/80 hover:border-amber-300/35 hover:text-amber-100",
+              ? "arc-btn-secondary"
+              : "arc-btn-locked",
           )}
           title={
             canAddBoard
@@ -266,7 +268,7 @@ export function BoardGrid({
 
                 {adding && (
                   <div className="break-inside-avoid mb-4">
-                    <div className="bg-surface rounded-xl p-3 border border-accent/30">
+                    <div className="arc-glass-soft rounded-xl border-[var(--arc-accent)] p-4">
                       <input
                         autoFocus
                         value={newTitle}
@@ -277,7 +279,8 @@ export function BoardGrid({
                         }}
                         onBlur={handleAdd}
                         placeholder="Board name..."
-                        className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500 px-1"
+                        aria-label="New board name"
+                        className="w-full bg-transparent px-1 text-sm text-[var(--arc-text-primary)] outline-none placeholder:text-[var(--arc-text-secondary)]"
                       />
                     </div>
                   </div>
@@ -287,6 +290,7 @@ export function BoardGrid({
 
             {!adding && (
               <button
+                type="button"
                 onClick={() => {
                   if (!canAddBoard) {
                     onBoardLimitReached?.();
@@ -295,10 +299,10 @@ export function BoardGrid({
                   setAdding(true);
                 }}
                 className={cn(
-                  "flex items-center gap-2 mt-2 px-3 py-1.5 rounded-lg text-sm",
+                  "arc-btn mt-2 min-h-9 px-3",
                   canAddBoard
-                    ? "text-slate-500 hover:text-white hover:bg-surface-2 transition-all duration-150"
-                    : "text-amber-100/70 hover:text-amber-100 hover:bg-amber-500/10",
+                    ? "arc-btn-ghost"
+                    : "arc-btn-locked",
                 )}
                 title={
                   canAddBoard
@@ -331,11 +335,11 @@ function LockedBoardCard({
 }) {
   return (
     <button
+      type="button"
       onClick={onUpgrade}
       className={cn(
-        "w-full rounded-xl border border-amber-300/25 bg-amber-500/10",
-        "p-4 text-left text-amber-100/80 shadow-lg shadow-black/10",
-        "hover:bg-amber-500/15 hover:text-amber-100 transition-colors",
+        "arc-btn-locked w-full rounded-xl p-4 text-left shadow-lg shadow-black/10",
+        "flex flex-col items-start",
       )}
     >
       <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full border border-amber-300/25 bg-amber-300/10">

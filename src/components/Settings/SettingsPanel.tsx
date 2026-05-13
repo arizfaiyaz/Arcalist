@@ -36,9 +36,8 @@ export function SettingsPanel({ open, onClose }: Props) {
       <div
         ref={panelRef}
         className={cn(
-          "relative flex w-full max-w-2xl mx-4 h-[480px]",
-          "bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl",
-          "shadow-2xl shadow-black/60 overflow-hidden",
+          "arc-glass-strong relative mx-4 flex h-[min(520px,calc(100vh-2rem))] w-full max-w-2xl rounded-2xl",
+          "overflow-hidden",
         )}
       >
         {/* Sidebar */}
@@ -74,7 +73,8 @@ export function SettingsPanel({ open, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="absolute top-3 right-3 text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]"
+            aria-label="Close settings"
+            className="absolute right-3 top-3 rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-text-primary)]"
           >
             <X size={15} />
           </button>
@@ -180,6 +180,11 @@ function AccountSettings() {
   const signOut = useArcalistStore((state) => state.signOut);
   const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
 
+  const handleSignOut = () => {
+    if (!window.confirm("Sign out of Arcalist?")) return;
+    void signOut();
+  };
+
   const downloadData = () => {
     if (!user) return;
     const state = useArcalistStore.getState();
@@ -221,7 +226,7 @@ function AccountSettings() {
       {user ? (
         <div className="flex flex-col gap-3">
           {/* User card */}
-          <div className="flex items-center gap-3 bg-surface-2 rounded-xl p-4">
+          <div className="flex items-center gap-3 rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] p-4">
             {user.user_metadata?.avatar_url ? (
               <img
                 src={user.user_metadata.avatar_url}
@@ -229,8 +234,8 @@ function AccountSettings() {
                 className="w-10 h-10 rounded-full"
               />
             ) : (
-              <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-                <span className="text-accent font-bold text-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--arc-button-active-bg)]">
+                <span className="text-sm font-bold text-[var(--arc-accent)]">
                   {user.email?.charAt(0).toUpperCase()}
                 </span>
               </div>
@@ -265,8 +270,8 @@ function AccountSettings() {
           </div>
 
           <button
-            onClick={signOut}
-            className="w-full py-2.5 rounded-xl text-sm text-slate-300 bg-surface-2 hover:bg-white/10 border border-white/10 transition-all"
+            onClick={handleSignOut}
+            className="arc-btn arc-btn-secondary w-full"
           >
             Sign Out
           </button>
@@ -274,7 +279,7 @@ function AccountSettings() {
           <button
             type="button"
             onClick={() => setSyncSettingsOpen((value) => !value)}
-            className="w-full rounded-xl border border-[var(--arc-glass-border)] bg-surface-2 px-4 py-3 text-left text-sm text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]"
+            className="w-full rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] px-4 py-3 text-left text-sm text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-hover-bg)]"
           >
             Cross-browser Sync
             <span className="block text-xs text-[var(--arc-text-secondary)]">
@@ -286,13 +291,13 @@ function AccountSettings() {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          <p className="text-slate-400 text-sm">
+          <p className="text-sm text-[var(--arc-text-secondary)]">
             Sign in to sync your bookmarks across all your devices
             automatically.
           </p>
           <button
             onClick={signInWithGoogle}
-            className="w-full py-2.5 rounded-xl text-sm font-medium bg-accent text-background hover:bg-accent-hover transition-all"
+            className="arc-btn arc-btn-primary w-full"
           >
             Sign in with Google
           </button>
@@ -308,14 +313,14 @@ function SupportSettings() {
     <div className="p-6">
       <h2 className="text-[var(--arc-text-primary)] font-bold text-lg mb-6">Support</h2>
 
-      <div className="bg-surface-2 rounded-xl p-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-3 rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] p-4">
         <div>
           <p className="text-[var(--arc-text-primary)] text-sm font-medium">Contact</p>
           <p className="text-[var(--arc-text-secondary)] text-xs mt-1">
             Have a question or feedback? Email us anytime at{" "}
             <a
               href="mailto:arizfaiyazwork@gmail.com"
-              className="text-accent hover:underline"
+              className="text-[var(--arc-accent)] hover:underline"
             >
               arizfaiyazwork@gmail.com
             </a>
@@ -323,7 +328,7 @@ function SupportSettings() {
         </div>
         <a
           href="mailto:arizfaiyazwork@gmail.com"
-          className="w-full py-2 rounded-xl text-sm text-[var(--arc-text-secondary)] bg-surface hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)] border border-white/10 transition-all flex items-center justify-center"
+          className="arc-btn arc-btn-secondary w-full"
         >
           Contact Us
         </a>
@@ -343,10 +348,10 @@ function SettingsSection({
 }) {
   return (
     <div className="mb-6">
-      <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mb-3">
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--arc-text-secondary)]">
         {title}
       </p>
-      <div className="bg-surface-2 rounded-xl overflow-hidden divide-y divide-white/5">
+      <div className="overflow-hidden rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] divide-y divide-[var(--arc-glass-border)]">
         {children}
       </div>
     </div>
@@ -372,10 +377,13 @@ function SettingsToggle({
       </div>
       {/* Toggle */}
       <button
+        type="button"
         onClick={() => onChange(!value)}
+        aria-pressed={value}
+        aria-label={label}
         className={cn(
           "w-10 h-6 rounded-full relative transition-all duration-200 shrink-0",
-          value ? "bg-accent" : "bg-surface",
+          value ? "bg-[var(--arc-accent)]" : "bg-[var(--arc-glass-bg)]",
         )}
       >
         <div
@@ -415,6 +423,7 @@ function SettingsNumber({
         min={min}
         max={max}
         value={value}
+        aria-label={label}
         onChange={(e) => {
           const next = Number(e.target.value);
           if (!Number.isFinite(next)) return;
@@ -422,8 +431,7 @@ function SettingsNumber({
         }}
         className={cn(
           "w-20 px-2 py-1 rounded-lg text-sm",
-          "bg-surface-2 text-[var(--arc-text-primary)] border border-white/10",
-          "outline-none focus:border-accent/40",
+          "arc-input",
         )}
       />
     </div>
@@ -451,11 +459,11 @@ function SettingsSelect({
       </div>
       <select
         value={value}
+        aria-label={label}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
           "px-2 py-1 rounded-lg text-sm",
-          "bg-surface-2 text-[var(--arc-text-primary)] border border-white/10",
-          "outline-none focus:border-accent/40",
+          "arc-input",
         )}
       >
         <option value="">Inbox / First Board</option>
@@ -485,6 +493,7 @@ function SettingsLink({
         <p className="text-[var(--arc-text-secondary)] text-xs mt-0.5">{description}</p>
       </div>
       <button
+        type="button"
         onClick={() => {
           if (
             href.startsWith("chrome://") &&
@@ -497,9 +506,7 @@ function SettingsLink({
           window.open(href, "_blank", "noopener,noreferrer");
         }}
         className={cn(
-          "px-3 py-1.5 rounded-lg text-xs",
-          "bg-surface-2 text-slate-300 border border-white/10",
-          "hover:text-white hover:border-accent/30",
+          "arc-btn arc-btn-secondary min-h-8 px-3 text-xs",
         )}
       >
         Open

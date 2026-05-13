@@ -53,8 +53,7 @@ export function SmartCollectionsPanel({ open, onClose }: Props) {
       <div
         className={cn(
           "relative flex h-[min(760px,calc(100vh-4rem))] w-full max-w-6xl flex-col overflow-hidden rounded-2xl",
-          "border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)]",
-          "shadow-2xl shadow-black/60",
+          "arc-glass-strong",
         )}
         onClick={(event) => event.stopPropagation()}
       >
@@ -79,6 +78,7 @@ export function SmartCollectionsPanel({ open, onClose }: Props) {
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             title="Close Smart Collections"
             className="rounded-full p-1.5 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"

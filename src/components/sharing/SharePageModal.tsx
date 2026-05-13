@@ -156,8 +156,7 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
       <div
         className={cn(
           "relative w-full max-w-lg overflow-hidden rounded-2xl",
-          "border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)]",
-          "shadow-2xl shadow-black/60",
+          "arc-glass-strong",
         )}
         onClick={(event) => event.stopPropagation()}
       >
@@ -176,6 +175,7 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             title="Close"
             className="rounded-full p-1.5 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
@@ -259,9 +259,10 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
             </div>
           ) : (
             <button
+              type="button"
               onClick={handleCreate}
               disabled={busy === "creating"}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--arc-accent)] px-4 py-2.5 text-sm font-semibold text-[var(--arc-accent-foreground)] hover:bg-accent-hover disabled:opacity-60"
+              className="arc-btn arc-btn-primary w-full disabled:opacity-60"
             >
               {busy === "creating" && <Loader2 size={15} className="animate-spin" />}
               Create share link
@@ -297,6 +298,7 @@ function IconButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={label}
       disabled={busy}
@@ -322,6 +324,7 @@ function ActionButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={busy}
       className={cn(

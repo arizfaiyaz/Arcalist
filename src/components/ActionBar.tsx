@@ -107,7 +107,7 @@ export function ActionBar({
   return (
     <div className={cn(containerClass, className)}>
       {groupTools ? (
-        <div className="relative">
+        <div className="relative rounded-full p-1 arc-glass-strong">
           <ActionButton
             icon={MoreVertical}
             label="Tools"
@@ -115,17 +115,17 @@ export function ActionBar({
             active={menuOpen}
           />
           {menuOpen && (
-            <div className="absolute right-12 top-1/2 -translate-y-1/2 w-56 bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-xl shadow-xl shadow-black/40 p-2">
+            <div className="arc-menu absolute right-14 top-1/2 z-50 w-60 -translate-y-1/2 rounded-xl p-2">
               {actions.map((action) => (
                 <button
                   key={action.label}
+                  type="button"
                   onClick={() => {
                     action.onClick();
                     setMenuOpen(false);
                   }}
                   className={cn(
-                    "w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm",
-                    "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]",
+                    "arc-menu-item",
                     action.active && "text-[var(--arc-accent)]",
                   )}
                 >
@@ -220,15 +220,15 @@ function ActionButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       title={label}
+      aria-label={label}
       className={cn(
-        "w-10 h-10 rounded-full flex items-center justify-center",
-        "relative",
-        "border transition-all duration-150 shadow-lg shadow-black/20",
+        "arc-icon-btn relative",
         active
-          ? "bg-accent/20 border-[var(--arc-accent)] text-[var(--arc-accent)]"
-          : "bg-[var(--arc-button-bg)] border-[var(--arc-glass-border)] text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] hover:border-[var(--arc-accent)] hover:bg-[var(--arc-button-bg)]",
+          ? "border-[var(--arc-accent)] text-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]"
+          : "",
       )}
     >
       <Icon size={17} />

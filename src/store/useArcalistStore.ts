@@ -1,6 +1,11 @@
 import { create } from "zustand";
 import { generateId } from "../lib/id";
-import { saveState, loadState } from "../lib/storage";
+import {
+  clearWorkspaceCacheForUser,
+  loadState,
+  saveState,
+  setStoredAuthState,
+} from "../lib/storage";
 import { markDirty, pushToCloud, resolveConflict, syncNow } from "../lib/sync";
 import {
   getSyncMeta,
@@ -76,6 +81,9 @@ type ArcalistStore = ArcalistState & {
 
   // Initialization & auth
   initialize: () => Promise<void>;
+  hydrateWorkspaceForUser: (user: User) => Promise<void>;
+  setAuthenticatedUser: (user: User | null) => Promise<void>;
+  clearWorkspaceStore: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 
@@ -201,6 +209,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       overflowBoards: state.overflowBoards ?? [],
     };
     return normalizeWorkspaceState(merged);
+  };
+
+  const emptyWorkspaceState = (): ArcalistState => ({
+    pages: [],
+    activePageId: "",
+    trash: [],
+    overflowBoards: [],
+    privacyMode: false,
+    updatedAt: 0,
+    settings: defaultState.settings,
+    wallpaperTheme: DEFAULT_WALLPAPER,
+  });
+
+  const clearWorkspaceFromMemory = () => {
+    set({
+      ...emptyWorkspaceState(),
+      syncStatus: "idle",
+      hydrated: false,
+    });
   };
 
   const canUseChromeBookmarks = () =>
@@ -364,19 +391,41 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Initialization ───────────────────────────────────────
     initialize: async () => {
-      // 1. Load local state first (instant)
-      const local = await loadState();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session?.user) {
+        clearWorkspaceFromMemory();
+        set({ user: null, authReady: true });
+        await setStoredAuthState(null);
+        await setPlanStatus(false, "free");
+        return;
+      }
+
+      await get().hydrateWorkspaceForUser(session.user);
+    },
+
+    hydrateWorkspaceForUser: async (user) => {
+      set({ user, authReady: true, hydrated: false, signingIn: false });
+      await setStoredAuthState(user.id);
+
+      const limits = getUserPlanLimits(user);
+      await setPlanStatus(limits.isProUser, limits.planName);
+
+      const local = await loadState(user.id);
+      if (get().user?.id !== user.id) return;
       if (local) {
         const normalized = normalizeState(local);
         set({
           ...normalized,
+          user,
           hydrated: true,
         });
-        saveState(normalized);
+        await saveState(normalized, user.id);
         applyTheme(
           getEffectiveTheme(
             normalized.settings.selectedThemeId,
-            false,
+            limits.isProUser,
             normalized.settings.customWallpapers.map(customWallpaperToTheme),
           ),
         );
@@ -385,28 +434,24 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           ...defaultState,
           updatedAt: Date.now(),
         });
-        set({ ...initial, hydrated: true });
-        saveState(initial);
+        set({ ...initial, user, hydrated: true });
+        await saveState(initial, user.id);
         applyTheme(
           getEffectiveTheme(
             initial.settings.selectedThemeId,
-            false,
+            limits.isProUser,
             initial.settings.customWallpapers.map(customWallpaperToTheme),
           ),
         );
       }
 
-      // 2. Check for existing Supabase session (fast local read)
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      set({ user: session?.user ?? null, authReady: true });
-      const initialPlan = getUserPlanLimits(session?.user ?? null);
-      await setPlanStatus(initialPlan.isProUser, initialPlan.planName);
-
       const maybeImportChrome = async () => {
-        const current = (await loadState()) ?? get();
-        const imported = await importChromeBookmarks(current as ArcalistState);
+        const current = (await loadState(user.id)) ?? get();
+        const imported = await importChromeBookmarks(
+          current as ArcalistState,
+          user.id,
+        );
+        if (get().user?.id !== user.id) return;
         if (imported) {
           const normalized = normalizeState({
             ...imported,
@@ -415,55 +460,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
               (current as ArcalistState).overflowBoards ??
               [],
           });
-          set(normalized);
-          saveState(normalized);
+          set({ ...normalized, user });
+          await saveState(normalized, user.id);
           applyTheme(
             getEffectiveTheme(
               normalized.settings.selectedThemeId,
-              false,
+              limits.isProUser,
               normalized.settings.customWallpapers.map(customWallpaperToTheme),
             ),
           );
         }
       };
 
-      // 3. Listen for auth changes (sign in / sign out)
-      supabase.auth.onAuthStateChange(async (event, session) => {
-        if (event === "SIGNED_IN" && session?.user) {
-          set({ user: session.user, authReady: true });
-          const limits = getUserPlanLimits(session.user);
-          await setPlanStatus(limits.isProUser, limits.planName);
-
-          if (limits.isProUser && (await getSyncMeta()).enabled) {
-            const currentLocal = await loadState();
-            const synced = await syncNow(session.user.id, currentLocal ?? get());
-            if (synced) {
-              const normalized = normalizeState({
-                ...synced,
-                settings: { ...defaultState.settings, ...synced.settings },
-                privacyMode: false,
-                overflowBoards: synced.overflowBoards ?? [],
-              });
-              set({ ...normalized, user: session.user });
-              saveState(normalized);
-              set({ syncStatus: "synced" });
-              setTimeout(() => set({ syncStatus: "idle" }), 2000);
-            }
-          }
-
-          await maybeImportChrome();
-        } else if (event === "SIGNED_OUT") {
-          set({ user: null, syncStatus: "idle", authReady: true });
-          await setPlanStatus(false, "free");
-        }
-      });
-
       const runBackgroundTasks = async () => {
-        if (session?.user && getUserPlanLimits(session.user).isProUser) {
+        if (limits.isProUser) {
           const meta = await getSyncMeta();
           if (meta.enabled) {
-            const currentLocal = (await loadState()) ?? get();
-            const synced = await syncNow(session.user.id, currentLocal);
+            const currentLocal = (await loadState(user.id)) ?? get();
+            const synced = await syncNow(user.id, currentLocal);
+            if (get().user?.id !== user.id) return;
             if (synced) {
               const winner = currentLocal
                 ? resolveConflict(currentLocal, synced)
@@ -474,8 +489,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
                 overflowBoards: winner.overflowBoards ?? [],
               };
               const normalized = normalizeState(merged);
-              set(normalized);
-              saveState(normalized);
+              set({ ...normalized, user });
+              await saveState(normalized, user.id);
             }
           }
         }
@@ -484,17 +499,19 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
         const syncChanged = await autoSyncChromeBookmarks(
           { ...get() } as ArcalistState,
+          user.id,
         );
+        if (get().user?.id !== user.id) return;
         if (syncChanged) {
-          const syncedState = await loadState();
+          const syncedState = await loadState(user.id);
           if (syncedState) {
             const normalized = normalizeState(syncedState);
-            set(normalized);
-            saveState(normalized);
+            set({ ...normalized, user });
+            await saveState(normalized, user.id);
             applyTheme(
               getEffectiveTheme(
                 normalized.settings.selectedThemeId,
-                false,
+                limits.isProUser,
                 normalized.settings.customWallpapers.map(customWallpaperToTheme),
               ),
             );
@@ -505,6 +522,25 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       };
 
       void runBackgroundTasks();
+    },
+
+    setAuthenticatedUser: async (user) => {
+      if (!user) {
+        clearWorkspaceFromMemory();
+        set({ user: null, authReady: true, signingIn: false, signInError: null });
+        await setStoredAuthState(null);
+        await setPlanStatus(false, "free");
+        return;
+      }
+
+      set({ user, authReady: true, signingIn: false, signInError: null });
+      await setStoredAuthState(user.id);
+      const limits = getUserPlanLimits(user);
+      await setPlanStatus(limits.isProUser, limits.planName);
+    },
+
+    clearWorkspaceStore: () => {
+      clearWorkspaceFromMemory();
     },
 
     // ─── Auth ─────────────────────────────────────────────────
@@ -576,27 +612,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         }
 
         if (data.user) {
-          set({ user: data.user, signingIn: false, signInError: null });
-          const limits = getUserPlanLimits(data.user);
-          await setPlanStatus(limits.isProUser, limits.planName);
-
-          if (limits.isProUser && (await getSyncMeta()).enabled) {
-            const currentLocal = await loadState();
-            const synced = await syncNow(data.user.id, currentLocal ?? get());
-            if (synced) {
-              const winner = currentLocal
-                ? resolveConflict(currentLocal, synced)
-                : synced;
-              const merged: ArcalistState = {
-                ...winner,
-                settings: { ...defaultState.settings, ...winner.settings },
-                overflowBoards: winner.overflowBoards ?? [],
-              };
-              const normalized = normalizeState(merged);
-              set(normalized);
-              saveState(normalized);
-            }
-          }
+          await get().setAuthenticatedUser(data.user);
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -606,8 +622,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     signOut: async () => {
+      const userId = get().user?.id ?? null;
+      clearWorkspaceFromMemory();
+      set({ user: null, authReady: true, signingIn: false, signInError: null });
+      await setStoredAuthState(null);
+      await setPlanStatus(false, "free");
+      await clearWorkspaceCacheForUser(userId);
       await supabase.auth.signOut();
-      set({ user: null, syncStatus: "idle" });
     },
 
     // ─── Free Tier Helpers ─────────────────────────────────
@@ -632,6 +653,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     // ─── Internal Helpers ─────────────────────────────────────
     _persist: () => {
       const {
+        user,
         pages,
         activePageId,
         trash,
@@ -650,8 +672,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         wallpaperTheme,
         updatedAt: Date.now(),
       };
+      if (!user?.id) return;
       set({ updatedAt: state.updatedAt });
-      saveState(state);
+      saveState(state, user.id);
       void markDirty();
       if (IS_TEST_ENV) {
         void get()._syncToCloud();

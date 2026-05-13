@@ -107,7 +107,7 @@ export function SmartCollectionResults({ collection }: Props) {
 
       <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
         {!hasResults ? (
-          <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-[var(--arc-glass-border)] text-center text-sm text-[var(--arc-text-secondary)]">
+        <div className="arc-empty-state h-48 rounded-lg border border-dashed border-[var(--arc-glass-border)] text-sm">
             {query ? "No matching bookmarks found." : collection.emptyState}
           </div>
         ) : collection.id === "duplicates" ? (
@@ -243,7 +243,7 @@ function BookmarkResult({
         </div>
       )}
 
-      <button onClick={handleOpen} className="min-w-0 flex-1 text-left">
+      <button type="button" onClick={handleOpen} className="min-w-0 flex-1 text-left">
         <p className="truncate text-sm text-[var(--arc-text-primary)]">
           {bookmark.title || bookmark.url}
         </p>
@@ -254,6 +254,7 @@ function BookmarkResult({
 
       <div className="flex shrink-0 items-center gap-1">
         <button
+          type="button"
           onClick={handleOpen}
           title="Open bookmark"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-accent)]"
@@ -261,6 +262,7 @@ function BookmarkResult({
           <ArrowUpRight size={14} />
         </button>
         <button
+          type="button"
           onClick={() => onEdit(bookmark)}
           title="Edit original bookmark"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-accent)]"
@@ -268,6 +270,7 @@ function BookmarkResult({
           <Pencil size={13} />
         </button>
         <button
+          type="button"
           onClick={handleDelete}
           title="Move original bookmark to trash"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"

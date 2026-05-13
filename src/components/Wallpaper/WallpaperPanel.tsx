@@ -172,23 +172,18 @@ export function WallpaperPanel({
     <div
       className={cn(
         positionClass,
-        "w-80 bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl",
-        "shadow-2xl shadow-black/60 overflow-hidden backdrop-blur-2xl",
+        "arc-glass-strong w-80 overflow-hidden rounded-2xl",
         className,
       )}
-      style={{
-        background:
-          effectiveTheme.mode === "dark"
-            ? "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)), rgba(15, 23, 42, 0.82)"
-            : "var(--arc-modal-bg)",
-      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--arc-glass-border)]">
         <h3 className="text-[var(--arc-text-primary)] font-semibold text-sm">Style</h3>
         <button
+          type="button"
           onClick={onClose}
-          className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]"
+          aria-label="Close style panel"
+          className="rounded-full p-1 text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-text-primary)]"
         >
           <X size={14} />
         </button>
@@ -198,6 +193,7 @@ export function WallpaperPanel({
       <div className="px-4 pt-3">
         <div className="flex rounded-xl overflow-hidden border border-[var(--arc-glass-border)]">
           <button
+            type="button"
             onClick={() => setStyleTab("dark")}
             className={cn(
               "flex-1 py-2 text-sm font-medium transition-all",
@@ -209,6 +205,7 @@ export function WallpaperPanel({
             Dark
           </button>
           <button
+            type="button"
             onClick={() => setStyleTab("light")}
             className={cn(
               "flex-1 py-2 text-sm font-medium transition-all",
@@ -242,6 +239,7 @@ export function WallpaperPanel({
         />
         <div className="grid grid-cols-2 gap-2 mb-4">
           <button
+            type="button"
             onClick={handleUploadClick}
             disabled={uploading}
             className={cn(

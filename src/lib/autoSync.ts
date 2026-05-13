@@ -2,6 +2,10 @@ import { addMapping, getBookmarkMap } from "./chromeBookmarkMap";
 import { FREE_PLAN } from "../config/plans";
 import { createBookmarkFromNode } from "./importBookmarks";
 import { getPlanStatus, markDirty } from "./sync/syncStorage";
+import {
+  getStoredAuthState,
+  getWorkspaceStorageKey,
+} from "./storage";
 import type { ArcalistState, Board, Bookmark } from "../types";
 
 const LAST_SYNC_KEY = "arcalist_last_sync";
@@ -46,9 +50,11 @@ function timestampValue(value: number | string | undefined): number {
 }
 
 export async function autoSyncChromeBookmarks(
-  state: ArcalistState
+  state: ArcalistState,
+  userId?: string,
 ): Promise<boolean> {
   try {
+    if (!userId) return false;
     const tree = await chrome.bookmarks.getTree();
     const root = tree[0];
     if (!root?.children) {
@@ -58,8 +64,9 @@ export async function autoSyncChromeBookmarks(
     const boardUrlMap = buildBoardUrlMap(state);
     const map = await getBookmarkMap();
     const plan = await getPlanStatus();
-    const lastSyncResult = await chrome.storage.local.get(LAST_SYNC_KEY);
-    const lastSyncTime = (lastSyncResult[LAST_SYNC_KEY] as number) ?? 0;
+    const lastSyncKey = `${LAST_SYNC_KEY}:${userId}`;
+    const lastSyncResult = await chrome.storage.local.get(lastSyncKey);
+    const lastSyncTime = (lastSyncResult[lastSyncKey] as number) ?? 0;
     const isFirstSync = lastSyncTime === 0;
 
     let hasChanges = false;
@@ -166,9 +173,13 @@ export async function autoSyncChromeBookmarks(
 
     if (hasChanges) {
       state.updatedAt = Date.now();
-      await chrome.storage.local.set({ arcalist_state: state });
+      await chrome.storage.local.set({
+        [getWorkspaceStorageKey(userId)]: state,
+      });
       await markDirty();
-      await chrome.storage.local.set({ [LAST_SYNC_KEY]: Date.now() });
+      await chrome.storage.local.set({
+        [lastSyncKey]: Date.now(),
+      });
     }
 
     return hasChanges;
@@ -185,12 +196,15 @@ export async function initializeAutoSync(): Promise<void> {
 }
 
 export async function handleAutoSyncAlarm(): Promise<void> {
-  const result = await chrome.storage.local.get("arcalist_state");
-  const state = result["arcalist_state"] as ArcalistState | undefined;
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || !authState.userId) return;
+  const storageKey = getWorkspaceStorageKey(authState.userId);
+  const result = await chrome.storage.local.get(storageKey);
+  const state = result[storageKey] as ArcalistState | undefined;
 
   if (!state) return;
 
-  const changed = await autoSyncChromeBookmarks(state);
+  const changed = await autoSyncChromeBookmarks(state, authState.userId);
 
   if (changed) {
     chrome.runtime.sendMessage({ type: "CHROME_BOOKMARKS_UPDATED" }).catch(
