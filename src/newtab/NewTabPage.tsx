@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { PageNav } from "../components/PageNav";
 import { BoardGrid } from "../components/BoardGrid";
@@ -54,7 +54,6 @@ export function NewTabPage() {
   const [sharePage, setSharePage] = useState<Page | null>(null);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [multiSelectMode, setMultiSelectMode] = useState(false);
-  const [pageLockNoticeDismissed, setPageLockNoticeDismissed] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string;
     description: string;
@@ -63,6 +62,7 @@ export function NewTabPage() {
   const [selectedBookmarks, setSelectedBookmarks] = useState<
     { id: string; boardId: string }[]
   >([]);
+  const wallpaperMenuRef = useRef<HTMLDivElement>(null);
 
   const activePage =
     visiblePages.find((p) => p.id === activePageId) ?? visiblePages[0];
@@ -108,6 +108,26 @@ export function NewTabPage() {
       setActivePage(activePage.id);
     }
   }, [activePage, activePageId, setActivePage, visiblePages]);
+
+  useEffect(() => {
+    if (!wallpaperOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (
+        target instanceof Node &&
+        wallpaperMenuRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setWallpaperOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+    };
+  }, [wallpaperOpen]);
 
   const showPageUpgradePrompt = () => {
     setUpgradePrompt({
@@ -202,7 +222,10 @@ export function NewTabPage() {
       }
     >
       <aside className="newtab-rail newtab-rail-left">
-        <div className="relative flex flex-col items-center gap-3">
+        <div
+          ref={wallpaperMenuRef}
+          className="relative flex flex-col items-center gap-3"
+        >
           <WallpaperButton
             layout="rail"
             onClick={() => setWallpaperOpen((v) => !v)}
@@ -229,36 +252,6 @@ export function NewTabPage() {
             lockedPageCount={lockedPageCount}
             onPageLimitReached={showPageUpgradePrompt}
           />
-
-          {lockedPageCount > 0 && !pageLockNoticeDismissed && (
-            <div className="mt-3 mb-2 flex items-start gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/80">
-              <div className="flex-1">
-                <p className="text-amber-100">
-                  You have {lockedPageCount} extra{" "}
-                  {lockedPageCount === 1 ? "page" : "pages"} saved.
-                </p>
-                <p className="text-amber-100/70">
-                  Upgrade to Pro to unlock them.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={showPageUpgradePrompt}
-                  className="px-2.5 py-1 rounded-full text-xs border border-amber-300/30 text-amber-100/80 hover:bg-amber-500/10"
-                  title="Upgrade to Pro"
-                >
-                  Upgrade
-                </button>
-                <button
-                  onClick={() => setPageLockNoticeDismissed(true)}
-                  className="px-2 py-1 rounded-full text-xs text-amber-100/70 hover:text-amber-100 hover:bg-amber-500/10"
-                  title="Dismiss"
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
 
           <BoardGrid
             page={activePage}

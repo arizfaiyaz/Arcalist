@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { normalizeSafeUrl } from "./urlSafety";
 import type { Page } from "../types";
 import type {
   PublicSharedPage,
@@ -61,13 +62,13 @@ export function buildSharedPageSnapshot(page: Page): SharedPageSnapshot {
         title: board.title,
         order: board.order,
         bookmarks: [...(board.bookmarks ?? [])]
-          .filter((bookmark) => !bookmark.isTrashed)
+          .filter((bookmark) => !bookmark.isTrashed && normalizeSafeUrl(bookmark.url))
           .map((bookmark, index) => ({
             id: bookmark.id,
             title: bookmark.title,
-            url: bookmark.url,
-            favicon: bookmark.favicon,
-            faviconUrl: bookmark.faviconUrl,
+            url: normalizeSafeUrl(bookmark.url) ?? "",
+            favicon: normalizeSafeUrl(bookmark.favicon ?? "") ?? undefined,
+            faviconUrl: normalizeSafeUrl(bookmark.faviconUrl ?? "") ?? undefined,
             order: index,
           })),
       })),

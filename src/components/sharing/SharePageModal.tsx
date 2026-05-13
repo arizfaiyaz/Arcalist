@@ -221,7 +221,9 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
                 <IconButton
                   icon={ExternalLink}
                   label="Open link"
-                  onClick={() => window.open(shareUrl, "_blank")}
+                  onClick={() =>
+                    window.open(shareUrl, "_blank", "noopener,noreferrer")
+                  }
                 />
               </div>
 

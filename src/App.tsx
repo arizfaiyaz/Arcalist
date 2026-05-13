@@ -3,17 +3,18 @@ import "./App.css";
 import "./index.css";
 import { NewTabPage } from "./newtab/NewTabPage";
 import { useArcalistStore } from "./store/useArcalistStore";
-import { OnboardingScreen } from "./components/Onboarding/OnboardingScreen";
 import { SharedPageView } from "./components/sharing/SharedPageView";
 
 function App() {
   const shareMatch = window.location.pathname.match(/^\/share\/([^/]+)/);
+  const shareToken = shareMatch?.[1] ?? null;
   const initialize = useArcalistStore((state) => state.initialize);
-  const user = useArcalistStore((state) => state.user);
   const hydrated = useArcalistStore((state) => state.hydrated);
   const authReady = useArcalistStore((state) => state.authReady);
 
   useEffect(() => {
+    if (shareToken) return;
+
     const boot = async () => {
       // Always initialize the store first
       await initialize();
@@ -40,10 +41,10 @@ function App() {
         chrome.runtime.onMessage.removeListener(handleMessage);
       }
     };
-  }, [initialize]);
+  }, [initialize, shareToken]);
 
-  if (shareMatch?.[1]) {
-    return <SharedPageView token={decodeURIComponent(shareMatch[1])} />;
+  if (shareToken) {
+    return <SharedPageView token={decodeURIComponent(shareToken)} />;
   }
 
   // Full-screen spinner while we check storage
@@ -56,10 +57,6 @@ function App() {
         </div>
       </div>
     );
-  }
-
-  if (!user) {
-    return <OnboardingScreen onComplete={() => {}} />;
   }
 
   return <NewTabPage />;

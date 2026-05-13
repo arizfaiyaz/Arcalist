@@ -3,6 +3,7 @@ import { GripVertical, Trash2, ExternalLink, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../lib/utils";
+import { normalizeSafeUrl, openSafeUrl } from "../lib/urlSafety";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { BookmarkEditModal } from "./BookmarkEditModal";
 import type { Bookmark } from "../types";
@@ -76,12 +77,14 @@ export function BookmarkItem({
   };
 
   const openIncognito = () => {
+    const safeUrl = normalizeSafeUrl(bookmark.url);
+    if (!safeUrl) return;
     recordBookmarkVisit(boardId, bookmark.id);
     // chrome.windows.create only works in extension context
     if (typeof chrome !== "undefined" && chrome.windows) {
-      chrome.windows.create({ url: bookmark.url, incognito: true });
+      chrome.windows.create({ url: safeUrl, incognito: true });
     } else {
-      window.open(bookmark.url, "_blank");
+      openSafeUrl(safeUrl, "_blank");
     }
     setContextMenu(null);
   };
@@ -145,8 +148,9 @@ export function BookmarkItem({
         <div className="flex-1 min-w-0">
           <button
             onClick={() => {
-              recordBookmarkVisit(boardId, bookmark.id);
-              window.open(bookmark.url, openInNewTab ? "_blank" : "_self");
+              if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
+                recordBookmarkVisit(boardId, bookmark.id);
+              }
             }}
             className="flex items-center gap-2 w-full text-left"
           >
@@ -234,8 +238,9 @@ export function BookmarkItem({
             icon={ExternalLink}
             label="Open in new tab"
             onClick={() => {
-              recordBookmarkVisit(boardId, bookmark.id);
-              window.open(bookmark.url, "_blank");
+              if (openSafeUrl(bookmark.url, "_blank")) {
+                recordBookmarkVisit(boardId, bookmark.id);
+              }
               setContextMenu(null);
             }}
           />

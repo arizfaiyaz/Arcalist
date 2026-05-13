@@ -11,6 +11,7 @@ import { cn } from "../lib/utils";
 import { BookmarkItem } from "./BookmarkItem";
 import type { Board } from "../types";
 import { useArcalistStore } from "../store/useArcalistStore";
+import { getSafeDomain, normalizeSafeUrl } from "../lib/urlSafety";
 
 type Props = {
   board: Board;
@@ -81,13 +82,9 @@ export function BoardCard({
       return;
     }
 
-    const url = trimmed.startsWith("http") ? trimmed : `https://${trimmed}`;
-    let domain: string;
-    try {
-      domain = new URL(url).hostname;
-    } catch {
-      domain = trimmed;
-    }
+    const url = normalizeSafeUrl(trimmed);
+    if (!url) return;
+    const domain = getSafeDomain(url) ?? trimmed;
 
     addBookmark(board.id, {
       title: domain.replace("www.", ""),

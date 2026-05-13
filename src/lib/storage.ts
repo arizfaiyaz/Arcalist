@@ -1,14 +1,11 @@
 import type { ArcalistState } from "../types";
+import { browserApi } from "./browserApi";
 
 const STORAGE_KEY = 'arcalist_state'
 
 export async function saveState(state: ArcalistState): Promise<void> {
   try {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      await chrome.storage.local.set({ [STORAGE_KEY]: state })
-    } else {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-    }
+    await browserApi.storage.set({ [STORAGE_KEY]: state })
   } catch (err) {
     console.error('[Arcalist] Failed to save state:', err)
   }
@@ -16,13 +13,8 @@ export async function saveState(state: ArcalistState): Promise<void> {
 
 export async function loadState(): Promise<ArcalistState | null> {
   try {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      const result = await chrome.storage.local.get(STORAGE_KEY)
-      return (result[STORAGE_KEY] as ArcalistState) ?? null
-    } else {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      return raw ? JSON.parse(raw) : null
-    }
+    const result = await browserApi.storage.get<Record<string, ArcalistState | undefined>>(STORAGE_KEY)
+    return result[STORAGE_KEY] ?? null
   } catch (err) {
     console.error('[Arcalist] Failed to load state:', err)
     return null

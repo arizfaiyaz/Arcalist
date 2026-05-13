@@ -7,6 +7,7 @@ import type {
 import { getDomainFromUrl } from "../../lib/smartCollections";
 import { useArcalistStore } from "../../store/useArcalistStore";
 import { BookmarkEditModal } from "../BookmarkEditModal";
+import { openSafeUrl } from "../../lib/urlSafety";
 
 type Props = {
   collection: SmartCollection;
@@ -213,8 +214,9 @@ function BookmarkResult({
   const domain = getDomainFromUrl(bookmark.url);
 
   const handleOpen = () => {
-    recordBookmarkVisit(bookmark.boardId, bookmark.bookmarkId);
-    window.open(bookmark.url, openInNewTab ? "_blank" : "_self");
+    if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
+      recordBookmarkVisit(bookmark.boardId, bookmark.bookmarkId);
+    }
   };
 
   const handleDelete = () => {

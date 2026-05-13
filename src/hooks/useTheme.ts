@@ -7,7 +7,10 @@ import {
   type ArcalistTheme,
 } from "../config/themes";
 import { applyTheme } from "../lib/theme";
-import { customWallpaperToTheme } from "../lib/customWallpapers";
+import {
+  customWallpaperToTheme,
+  refreshCustomWallpaperSignedUrls,
+} from "../lib/customWallpapers";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { usePlanLimits } from "./usePlanLimits";
 
@@ -23,6 +26,7 @@ export function useTheme() {
     (state) => state.settings.customWallpapers,
   );
   const updateSettings = useArcalistStore((state) => state.updateSettings);
+  const user = useArcalistStore((state) => state.user);
   const planLimits = usePlanLimits();
 
   const customThemes = useMemo(
@@ -44,6 +48,20 @@ export function useTheme() {
   useEffect(() => {
     applyTheme(effectiveTheme);
   }, [effectiveTheme]);
+
+  useEffect(() => {
+    if (!user || customWallpapers.length === 0) return;
+
+    let cancelled = false;
+    void refreshCustomWallpaperSignedUrls(customWallpapers).then((refreshed) => {
+      if (cancelled || refreshed === customWallpapers) return;
+      updateSettings({ customWallpapers: refreshed });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [customWallpapers, updateSettings, user]);
 
   const isThemeLocked = useCallback(
     (theme: ArcalistTheme) => theme.tier === "pro" && !planLimits.isProUser,

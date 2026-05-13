@@ -49,6 +49,10 @@ export function AuthStatus() {
             ? "Syncing..."
             : syncStatus === "synced"
               ? "Synced to cloud"
+              : syncStatus === "offline"
+                ? "Offline"
+                : syncStatus === "conflict"
+                  ? "Conflict resolved"
               : syncStatus === "error"
                 ? "Sync failed"
                 : "Cloud sync active"
@@ -56,13 +60,18 @@ export function AuthStatus() {
       >
         {syncStatus === "syncing" ? (
           <Loader2 size={14} className="text-accent animate-spin" />
-        ) : syncStatus === "error" ? (
-          <CloudOff size={14} className="text-red-400" />
+        ) : syncStatus === "error" || syncStatus === "offline" ? (
+          <CloudOff
+            size={14}
+            className={syncStatus === "offline" ? "text-amber-300" : "text-red-400"}
+          />
         ) : (
           <Cloud
             size={14}
             className={cn(
-              syncStatus === "synced" ? "text-accent" : "text-slate-500",
+              syncStatus === "synced" || syncStatus === "conflict"
+                ? "text-accent"
+                : "text-slate-500",
             )}
           />
         )}

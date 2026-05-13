@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink, Link } from "lucide-react";
 import { fetchPublicSharedPage } from "../../lib/sharing";
+import { normalizeSafeUrl } from "../../lib/urlSafety";
 import type { PublicSharedPage } from "../../types/sharing";
 
 type Props = {
@@ -70,12 +71,15 @@ export function SharedPageView({ token }: Props) {
                   {board.title}
                 </h2>
                 <div className="space-y-1">
-                  {board.bookmarks.map((bookmark) => (
+                  {board.bookmarks.map((bookmark) => {
+                    const safeUrl = normalizeSafeUrl(bookmark.url);
+                    if (!safeUrl) return null;
+                    return (
                     <a
                       key={bookmark.id}
-                      href={bookmark.url}
+                      href={safeUrl}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]"
                     >
                       {bookmark.favicon || bookmark.faviconUrl ? (
@@ -95,7 +99,8 @@ export function SharedPageView({ token }: Props) {
                         className="shrink-0 text-[var(--arc-text-secondary)]"
                       />
                     </a>
-                  ))}
+                    );
+                  })}
                   {board.bookmarks.length === 0 && (
                     <p className="px-2 py-3 text-sm text-[var(--arc-text-secondary)]">
                       No bookmarks in this board.

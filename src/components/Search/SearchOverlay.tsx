@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import { useArcalistStore } from '../../store/useArcalistStore'
 import { usePlanLimits } from '../../hooks/usePlanLimits'
 import { getVisiblePagesForPlan } from '../../lib/planLimits'
+import { openSafeUrl } from '../../lib/urlSafety'
 import type { Bookmark } from '../../types'
 
 type SearchResult = {
@@ -39,12 +40,17 @@ export function SearchOverlay({ open, onClose }: Props) {
 
   // Close on Escape
   useEffect(() => {
+    if (!open) return
+
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
     }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [onClose])
+    document.addEventListener('keydown', handler, true)
+    return () => document.removeEventListener('keydown', handler, true)
+  }, [onClose, open])
 
   // Flatten all bookmarks with their context for searching
   const allResults = useMemo<SearchResult[]>(() => {
@@ -169,9 +175,10 @@ function SearchResult({
   )
 
   const handleClick = () => {
-    recordBookmarkVisit(result.boardId, bookmark.id)
-    window.open(bookmark.url, '_self')
-    onSelect()
+    if (openSafeUrl(bookmark.url, '_self')) {
+      recordBookmarkVisit(result.boardId, bookmark.id)
+      onSelect()
+    }
   }
 
   return (

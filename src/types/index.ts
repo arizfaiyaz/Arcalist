@@ -10,6 +10,7 @@ export type Bookmark = {
   chromeBookmarkId?: string
   createdAt?: number | string
   updatedAt?: number | string
+  deletedAt?: string
   lastVisitedAt?: string
   visitCount?: number
   tags?: string[]
@@ -21,6 +22,8 @@ export type Board = {
   bookmarks: Bookmark[]
   order: number
   chromeFolderId?: string
+  updatedAt?: number | string
+  deletedAt?: string
 }
 
 export type Page = {
@@ -28,6 +31,8 @@ export type Page = {
   title: string
   boards: Board[]
   order: number
+  updatedAt?: number | string
+  deletedAt?: string
 }
 
 export type OverflowBoard = {

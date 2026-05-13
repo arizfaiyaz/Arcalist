@@ -173,9 +173,15 @@ export function WallpaperPanel({
       className={cn(
         positionClass,
         "w-80 bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl",
-        "shadow-2xl shadow-black/60 overflow-hidden",
+        "shadow-2xl shadow-black/60 overflow-hidden backdrop-blur-2xl",
         className,
       )}
+      style={{
+        background:
+          effectiveTheme.mode === "dark"
+            ? "linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)), rgba(15, 23, 42, 0.82)"
+            : "var(--arc-modal-bg)",
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--arc-glass-border)]">
@@ -240,9 +246,9 @@ export function WallpaperPanel({
             disabled={uploading}
             className={cn(
               "relative aspect-video rounded-xl overflow-hidden border-2",
-              "border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)]",
+              "border-[var(--arc-glass-border)] bg-black/35",
               "flex flex-col items-center justify-center gap-2",
-              "text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]",
+              "text-[var(--arc-text-primary)] hover:text-white",
               "transition-all duration-150 hover:border-[var(--arc-accent)]",
               uploading && "opacity-70 cursor-wait",
             )}
@@ -407,8 +413,10 @@ function ThemeGrid({
                 </button>
               )}
 
-              <div className="absolute bottom-0 left-0 right-0 z-20 px-2 py-1 bg-black/65">
-                <p className="text-white text-[10px] truncate">{theme.name}</p>
+              <div className="absolute bottom-0 left-0 right-0 z-20 px-2 py-1 bg-black/75 backdrop-blur-sm">
+                <p className="text-white text-[10px] font-medium truncate drop-shadow">
+                  {theme.name}
+                </p>
               </div>
 
               {isActive && (

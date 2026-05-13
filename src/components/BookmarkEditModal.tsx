@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
+import { normalizeSafeUrl } from "../lib/urlSafety";
 import { useArcalistStore } from "../store/useArcalistStore";
 import type { Bookmark } from "../types";
 
@@ -11,52 +12,47 @@ type Props = {
   boardId: string;
 };
 
-function normalizeUrl(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const withScheme = /^https?:\/\//i.test(trimmed)
-    ? trimmed
-    : `https://${trimmed}`;
-  try {
-    return new URL(withScheme).toString();
-  } catch {
-    return null;
-  }
+export function BookmarkEditModal({ open, onClose, bookmark, boardId }: Props) {
+  if (!open) return null;
+
+  return (
+    <BookmarkEditForm
+      key={`${boardId}:${bookmark.id}`}
+      onClose={onClose}
+      bookmark={bookmark}
+      boardId={boardId}
+    />
+  );
 }
 
-export function BookmarkEditModal({ open, onClose, bookmark, boardId }: Props) {
+function BookmarkEditForm({
+  onClose,
+  bookmark,
+  boardId,
+}: Omit<Props, "open">) {
   const updateBookmark = useArcalistStore((state) => state.updateBookmark);
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  const [description, setDescription] = useState("");
+  const [title, setTitle] = useState(bookmark.title);
+  const [url, setUrl] = useState(bookmark.url);
+  const [description, setDescription] = useState(bookmark.description ?? "");
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!open) return;
-    setTitle(bookmark.title);
-    setUrl(bookmark.url);
-    setDescription(bookmark.description ?? "");
-    setError("");
-  }, [open, bookmark]);
-
-  useEffect(() => {
-    if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [open, onClose]);
+  }, [onClose]);
 
   const handleSave = () => {
     const trimmedTitle = title.trim();
-    const normalizedUrl = normalizeUrl(url);
+    const normalizedUrl = normalizeSafeUrl(url);
     if (!trimmedTitle) {
       setError("Title is required.");
       return;
     }
     if (!normalizedUrl) {
-      setError("Enter a valid URL.");
+      setError("Enter a safe http or https URL.");
       return;
     }
     const trimmedDescription = description.trim();
@@ -67,8 +63,6 @@ export function BookmarkEditModal({ open, onClose, bookmark, boardId }: Props) {
     });
     onClose();
   };
-
-  if (!open) return null;
 
   return (
     <div

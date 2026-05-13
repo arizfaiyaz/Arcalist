@@ -30,6 +30,32 @@ export function validateWallpaperFile(file: File): string | null {
   return null;
 }
 
+async function hasAllowedWallpaperSignature(file: File): Promise<boolean> {
+  const header = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+  const isJpeg =
+    header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff;
+  const isPng =
+    header[0] === 0x89 &&
+    header[1] === 0x50 &&
+    header[2] === 0x4e &&
+    header[3] === 0x47 &&
+    header[4] === 0x0d &&
+    header[5] === 0x0a &&
+    header[6] === 0x1a &&
+    header[7] === 0x0a;
+  const isWebp =
+    header[0] === 0x52 &&
+    header[1] === 0x49 &&
+    header[2] === 0x46 &&
+    header[3] === 0x46 &&
+    header[8] === 0x57 &&
+    header[9] === 0x45 &&
+    header[10] === 0x42 &&
+    header[11] === 0x50;
+
+  return isJpeg || isPng || isWebp;
+}
+
 const createObjectUrlImage = (file: Blob) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file);
@@ -90,6 +116,10 @@ export async function uploadCustomWallpaper({
   if (validationError) return { ok: false, error: validationError };
 
   try {
+    if (!(await hasAllowedWallpaperSignature(file))) {
+      return { ok: false, error: "Please upload a valid JPG, PNG, or WebP image." };
+    }
+
     const compressed = await compressWallpaperToWebp(file);
     const wallpaperId = generateWallpaperId();
     const storagePath = `${userId}/${wallpaperId}.webp`;
@@ -109,9 +139,21 @@ export async function uploadCustomWallpaper({
       };
     }
 
-    const { data } = supabase.storage
+    const { data, error: signedUrlError } = await supabase.storage
       .from(CUSTOM_WALLPAPER_BUCKET)
-      .getPublicUrl(storagePath);
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+
+    if (signedUrlError || !data?.signedUrl) {
+      console.error(
+        "[Arcalist] Custom wallpaper signed URL failed:",
+        signedUrlError?.message,
+      );
+      await deleteCustomWallpaperFile(storagePath);
+      return {
+        ok: false,
+        error: "Something went wrong while preparing the wallpaper.",
+      };
+    }
 
     return {
       ok: true,
@@ -120,7 +162,7 @@ export async function uploadCustomWallpaper({
         userId,
         name: "My Wallpaper",
         storagePath,
-        publicUrl: data.publicUrl,
+        publicUrl: data.signedUrl,
         createdAt: new Date().toISOString(),
         mode,
         accentColor,
@@ -152,6 +194,41 @@ export async function deleteCustomWallpaperFile(storagePath: string) {
   if (error) {
     console.error("[Arcalist] Failed to delete custom wallpaper:", error.message);
   }
+}
+
+export async function createCustomWallpaperSignedUrl(storagePath: string) {
+  const { data, error } = await supabase.storage
+    .from(CUSTOM_WALLPAPER_BUCKET)
+    .createSignedUrl(storagePath, 60 * 60 * 24 * 365);
+
+  if (error || !data?.signedUrl) {
+    console.error(
+      "[Arcalist] Custom wallpaper signed URL refresh failed:",
+      error?.message,
+    );
+    return null;
+  }
+
+  return data.signedUrl;
+}
+
+export async function refreshCustomWallpaperSignedUrls(
+  wallpapers: CustomWallpaper[],
+) {
+  let changed = false;
+  const refreshed = await Promise.all(
+    wallpapers.map(async (wallpaper) => {
+      if (wallpaper.publicUrl.includes("/object/sign/")) return wallpaper;
+      const signedUrl = await createCustomWallpaperSignedUrl(
+        wallpaper.storagePath,
+      );
+      if (!signedUrl) return wallpaper;
+      changed = true;
+      return { ...wallpaper, publicUrl: signedUrl };
+    }),
+  );
+
+  return changed ? refreshed : wallpapers;
 }
 
 export function customWallpaperToTheme(
@@ -189,4 +266,3 @@ export function customWallpaperToTheme(
       : "linear-gradient(180deg, rgba(255, 255, 255, 0.56), rgba(255, 255, 255, 0.30))",
   };
 }
-

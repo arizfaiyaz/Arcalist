@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import { generateId } from "../lib/id";
 import { saveState, loadState } from "../lib/storage";
-import { pushToCloud, pullFromCloud, resolveConflict } from "../lib/sync";
+import { markDirty, pushToCloud, resolveConflict, syncNow } from "../lib/sync";
+import {
+  getSyncMeta,
+  setPlanStatus,
+  updateSyncMeta,
+} from "../lib/sync/syncStorage";
 import { autoSyncChromeBookmarks } from "../lib/autoSync.ts";
 import { importChromeBookmarks } from "../lib/importBookmarks";
 import { addMapping, getBookmarkMap, removeMapping } from "../lib/chromeBookmarkMap";
@@ -63,7 +68,7 @@ function normalizeBookmark(bookmark: Bookmark): Bookmark {
 type ArcalistStore = ArcalistState & {
   // Auth state
   user: User | null;
-  syncStatus: "idle" | "syncing" | "synced" | "error";
+  syncStatus: "idle" | "syncing" | "synced" | "offline" | "error" | "conflict";
   signingIn: boolean;
   signInError: string | null;
   hydrated: boolean;
@@ -396,6 +401,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         data: { session },
       } = await supabase.auth.getSession();
       set({ user: session?.user ?? null, authReady: true });
+      const initialPlan = getUserPlanLimits(session?.user ?? null);
+      await setPlanStatus(initialPlan.isProUser, initialPlan.planName);
 
       const maybeImportChrome = async () => {
         const current = (await loadState()) ?? get();
@@ -424,55 +431,52 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === "SIGNED_IN" && session?.user) {
           set({ user: session.user, authReady: true });
-          // Pull remote state on sign in
-          const remote = await pullFromCloud(session.user.id);
-          if (remote) {
-            // Remote exists — always use it on sign in
-            // User's cloud data is the source of truth
-            const merged: ArcalistState = {
-              ...remote,
-              settings: { ...defaultState.settings, ...remote.settings },
-              privacyMode: false,
-              overflowBoards: remote.overflowBoards ?? [],
-            };
-            const normalized = normalizeState(merged);
-            set({ ...normalized, user: session.user });
-            saveState(normalized);
-            await maybeImportChrome();
-          } else {
-            // No remote data yet — first time signing in
-            // Push current local state up to cloud
+          const limits = getUserPlanLimits(session.user);
+          await setPlanStatus(limits.isProUser, limits.planName);
+
+          if (limits.isProUser && (await getSyncMeta()).enabled) {
             const currentLocal = await loadState();
-            if (currentLocal) {
-              const normalized = normalizeState(currentLocal);
+            const synced = await syncNow(session.user.id, currentLocal ?? get());
+            if (synced) {
+              const normalized = normalizeState({
+                ...synced,
+                settings: { ...defaultState.settings, ...synced.settings },
+                privacyMode: false,
+                overflowBoards: synced.overflowBoards ?? [],
+              });
+              set({ ...normalized, user: session.user });
               saveState(normalized);
-              await pushToCloud(session.user.id, normalized);
               set({ syncStatus: "synced" });
               setTimeout(() => set({ syncStatus: "idle" }), 2000);
             }
-            await maybeImportChrome();
           }
+
+          await maybeImportChrome();
         } else if (event === "SIGNED_OUT") {
           set({ user: null, syncStatus: "idle", authReady: true });
+          await setPlanStatus(false, "free");
         }
       });
 
       const runBackgroundTasks = async () => {
-        if (session?.user) {
-          const remote = await pullFromCloud(session.user.id);
-          if (remote) {
+        if (session?.user && getUserPlanLimits(session.user).isProUser) {
+          const meta = await getSyncMeta();
+          if (meta.enabled) {
             const currentLocal = (await loadState()) ?? get();
-            const winner = currentLocal
-              ? resolveConflict(currentLocal, remote)
-              : remote;
-            const merged: ArcalistState = {
-              ...winner,
-              settings: { ...defaultState.settings, ...winner.settings },
-              overflowBoards: winner.overflowBoards ?? [],
-            };
-            const normalized = normalizeState(merged);
-            set(normalized);
-            saveState(normalized);
+            const synced = await syncNow(session.user.id, currentLocal);
+            if (synced) {
+              const winner = currentLocal
+                ? resolveConflict(currentLocal, synced)
+                : synced;
+              const merged: ArcalistState = {
+                ...winner,
+                settings: { ...defaultState.settings, ...winner.settings },
+                overflowBoards: winner.overflowBoards ?? [],
+              };
+              const normalized = normalizeState(merged);
+              set(normalized);
+              saveState(normalized);
+            }
           }
         }
 
@@ -573,29 +577,24 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
         if (data.user) {
           set({ user: data.user, signingIn: false, signInError: null });
+          const limits = getUserPlanLimits(data.user);
+          await setPlanStatus(limits.isProUser, limits.planName);
 
-          // Now push/pull from cloud
-          const remote = await pullFromCloud(data.user.id);
-          if (remote) {
+          if (limits.isProUser && (await getSyncMeta()).enabled) {
             const currentLocal = await loadState();
-            const winner = currentLocal
-              ? resolveConflict(currentLocal, remote)
-              : remote;
-            const merged: ArcalistState = {
-              ...winner,
-              settings: { ...defaultState.settings, ...winner.settings },
-              overflowBoards: winner.overflowBoards ?? [],
-            };
-            const normalized = normalizeState(merged);
-            set(normalized);
-            saveState(normalized);
-          } else {
-            // First sign in — push local state up
-            const currentLocal = await loadState();
-            if (currentLocal) {
-              const normalized = normalizeState(currentLocal);
+            const synced = await syncNow(data.user.id, currentLocal ?? get());
+            if (synced) {
+              const winner = currentLocal
+                ? resolveConflict(currentLocal, synced)
+                : synced;
+              const merged: ArcalistState = {
+                ...winner,
+                settings: { ...defaultState.settings, ...winner.settings },
+                overflowBoards: winner.overflowBoards ?? [],
+              };
+              const normalized = normalizeState(merged);
+              set(normalized);
               saveState(normalized);
-              await pushToCloud(data.user.id, normalized);
             }
           }
         }
@@ -653,6 +652,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       };
       set({ updatedAt: state.updatedAt });
       saveState(state);
+      void markDirty();
       if (IS_TEST_ENV) {
         void get()._syncToCloud();
       } else {
@@ -674,6 +674,21 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       } = get();
       const userId = user?.id ?? (IS_TEST_ENV ? "test-user" : null);
       if (!userId) return;
+      const limits = getUserPlanLimits(user);
+      if (!IS_TEST_ENV) {
+        const meta = await getSyncMeta();
+        if (!limits.isProUser || !meta.enabled) {
+          await updateSyncMeta({
+            status: limits.isProUser ? "idle" : "idle",
+          });
+          return;
+        }
+        if (!navigator.onLine) {
+          set({ syncStatus: "offline" });
+          await updateSyncMeta({ status: "offline" });
+          return;
+        }
+      }
 
       set({ syncStatus: "syncing" });
       try {

@@ -28,22 +28,29 @@ export function createChromeBookmarkMock() {
     parent.children = parent.children ?? [];
     return parent;
   };
+  const addFolder = (id: string, title: string, parentId = "0") => {
+    const parent = ensureParent(parentId);
+    const node: BookmarkNode = { id, title, parentId, children: [] };
+    tree.nodes.set(id, node);
+    parent.children?.push(node);
+    return node;
+  };
+  const addBookmark = (
+    id: string,
+    title: string,
+    url: string,
+    parentId = "0",
+  ) => {
+    const parent = ensureParent(parentId);
+    const node: BookmarkNode = { id, title, url, parentId };
+    tree.nodes.set(id, node);
+    parent.children?.push(node);
+    return node;
+  };
 
   return {
-    addFolder: (id: string, title: string, parentId = "0") => {
-      const parent = ensureParent(parentId);
-      const node: BookmarkNode = { id, title, parentId, children: [] };
-      tree.nodes.set(id, node);
-      parent.children?.push(node);
-      return node;
-    },
-    addBookmark: (id: string, title: string, url: string, parentId = "0") => {
-      const parent = ensureParent(parentId);
-      const node: BookmarkNode = { id, title, url, parentId };
-      tree.nodes.set(id, node);
-      parent.children?.push(node);
-      return node;
-    },
+    addFolder,
+    addBookmark,
     api: {
       getTree: async () => [tree.root],
       getChildren: async (parentId: string) =>
@@ -53,8 +60,8 @@ export function createChromeBookmarkMock() {
       create: async ({ parentId = "0", title, url }: { parentId?: string; title: string; url?: string }) => {
         const id = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
         return url
-          ? { ...(this as unknown as { addBookmark: any }).addBookmark(id, title, url, parentId) }
-          : { ...(this as unknown as { addFolder: any }).addFolder(id, title, parentId) };
+          ? { ...addBookmark(id, title, url, parentId) }
+          : { ...addFolder(id, title, parentId) };
       },
       remove: async (id: string) => {
         const node = getNode(id);

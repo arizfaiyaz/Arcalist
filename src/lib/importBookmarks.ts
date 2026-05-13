@@ -1,4 +1,6 @@
 import { setBookmarkMap } from "./chromeBookmarkMap";
+import { markDirty } from "./sync/syncStorage";
+import { getSafeDomain, normalizeSafeUrl } from "./urlSafety";
 import type { ArcalistState, Board, Bookmark } from "../types";
 
 const STORAGE_KEY = "arcalist_state";
@@ -11,27 +13,15 @@ function generateId(): string {
 }
 
 function favicon(url: string): string {
-  try {
-    const domain = new URL(url).hostname;
-    return `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-  } catch {
-    return "";
-  }
-}
-
-function normalizeUrl(rawUrl: string): string | null {
-  try {
-    return new URL(rawUrl).toString();
-  } catch {
-    return null;
-  }
+  const domain = getSafeDomain(url);
+  return domain ? `https://www.google.com/s2/favicons?domain=${domain}&sz=64` : "";
 }
 
 export function createBookmarkFromNode(
   node: chrome.bookmarks.BookmarkTreeNode
 ): Bookmark | null {
   if (!node.url) return null;
-  const url = normalizeUrl(node.url);
+  const url = normalizeSafeUrl(node.url);
   if (!url) return null;
   const createdAt = node.dateAdded || Date.now();
   return {
@@ -278,6 +268,7 @@ export async function importChromeBookmarks(
   const migrated = mergeImportedPageIntoHome(state);
   if (migrated) {
     await chrome.storage.local.set({ [STORAGE_KEY]: migrated });
+    await markDirty();
     return migrated;
   }
 
@@ -309,6 +300,7 @@ export async function importChromeBookmarks(
     [STORAGE_KEY]: parsed.state,
     [IMPORT_FLAG_KEY]: true,
   });
+  await markDirty();
   await setBookmarkMap(parsed.map);
 
   return parsed.state;

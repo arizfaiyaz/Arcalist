@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { X, Settings, User, HelpCircle } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useArcalistStore } from "../../store/useArcalistStore";
+import { SyncSettings } from "./SyncSettings";
 
 type Tab = "general" | "account" | "support";
 
@@ -12,23 +13,33 @@ type Props = {
 
 export function SettingsPanel({ open, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("general");
+  const panelRef = useRef<HTMLDivElement>(null);
 
   if (!open) return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center"
-      onClick={onClose}
+      onPointerDown={(event) => {
+        const target = event.target;
+        if (
+          target instanceof Node &&
+          panelRef.current?.contains(target)
+        ) {
+          return;
+        }
+        onClose();
+      }}
     >
       <div className="absolute inset-0 bg-[var(--arc-overlay)] backdrop-blur-sm" />
 
       <div
+        ref={panelRef}
         className={cn(
           "relative flex w-full max-w-2xl mx-4 h-[480px]",
           "bg-[var(--arc-modal-bg)] border border-[var(--arc-glass-border)] rounded-2xl",
           "shadow-2xl shadow-black/60 overflow-hidden",
         )}
-        onClick={(e) => e.stopPropagation()}
       >
         {/* Sidebar */}
         <div className="w-52 border-r border-[var(--arc-glass-border)] p-3 flex flex-col gap-1">
@@ -41,6 +52,7 @@ export function SettingsPanel({ open, onClose }: Props) {
           ].map(({ id, label, icon: Icon }) => (
             <button
               key={id}
+              type="button"
               onClick={() => setTab(id)}
               className={cn(
                 "flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm",
@@ -60,6 +72,7 @@ export function SettingsPanel({ open, onClose }: Props) {
         <div className="flex-1 overflow-y-auto">
           {/* Close button */}
           <button
+            type="button"
             onClick={onClose}
             className="absolute top-3 right-3 text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)]"
           >
@@ -139,12 +152,6 @@ function GeneralSettings() {
           value={settings.showDescriptions}
           onChange={(v) => updateSettings({ showDescriptions: v })}
         />
-        <SettingsToggle
-          label="Auto close tabs after Save All Tabs"
-          description="Automatically close tabs after saving them"
-          value={settings.autoCloseAfterSaveAllTabs}
-          onChange={(v) => updateSettings({ autoCloseAfterSaveAllTabs: v })}
-        />
         <SettingsSelect
           label="Default capture board"
           description="Default destination for Quick Save"
@@ -171,6 +178,41 @@ function AccountSettings() {
   const user = useArcalistStore((state) => state.user);
   const signInWithGoogle = useArcalistStore((state) => state.signInWithGoogle);
   const signOut = useArcalistStore((state) => state.signOut);
+  const [syncSettingsOpen, setSyncSettingsOpen] = useState(false);
+
+  const downloadData = () => {
+    if (!user) return;
+    const state = useArcalistStore.getState();
+    const payload = {
+      app: "Arcalist",
+      exportedAt: new Date().toISOString(),
+      user: {
+        id: user.id,
+        email: user.email,
+      },
+      workspace: {
+        pages: state.pages,
+        activePageId: state.activePageId,
+        trash: state.trash,
+        overflowBoards: state.overflowBoards,
+        privacyMode: state.privacyMode,
+        settings: state.settings,
+        wallpaperTheme: state.wallpaperTheme,
+        updatedAt: state.updatedAt,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `arcalist-export-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.append(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="p-6">
@@ -193,19 +235,31 @@ function AccountSettings() {
                 </span>
               </div>
             )}
-            <div>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+            <div className="min-w-0">
+              <p className="text-[10px] text-[var(--arc-text-secondary)] uppercase tracking-wider">
                 Signed in as
               </p>
-              <p className="text-accent text-sm font-medium">{user.email}</p>
+              <p className="text-[var(--arc-accent)] text-sm font-medium truncate">{user.email}</p>
               <div className="flex items-center gap-2 mt-1">
-                <button className="text-slate-500 hover:text-white text-xs transition-colors">
+                <button
+                  onClick={downloadData}
+                  className="text-[var(--arc-text-secondary)] hover:text-[var(--arc-text-primary)] text-xs transition-colors"
+                >
                   Download Data
                 </button>
-                <span className="text-slate-600">·</span>
-                <button className="text-slate-500 hover:text-red-400 text-xs transition-colors">
-                  Delete Account
-                </button>
+                <span className="text-[var(--arc-text-secondary)]">·</span>
+                <a
+                  href={`mailto:arizfaiyazwork@gmail.com?subject=${encodeURIComponent(
+                    "Arcalist account deletion request",
+                  )}&body=${encodeURIComponent(
+                    `Please delete my Arcalist account and associated cloud data.\n\nAccount email: ${
+                      user.email ?? ""
+                    }\nUser ID: ${user.id}`,
+                  )}`}
+                  className="text-[var(--arc-text-secondary)] hover:text-red-300 text-xs transition-colors"
+                >
+                  Request Deletion
+                </a>
               </div>
             </div>
           </div>
@@ -216,6 +270,19 @@ function AccountSettings() {
           >
             Sign Out
           </button>
+
+          <button
+            type="button"
+            onClick={() => setSyncSettingsOpen((value) => !value)}
+            className="w-full rounded-xl border border-[var(--arc-glass-border)] bg-surface-2 px-4 py-3 text-left text-sm text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]"
+          >
+            Cross-browser Sync
+            <span className="block text-xs text-[var(--arc-text-secondary)]">
+              {syncSettingsOpen ? "Hide sync settings" : "Manage sync settings"}
+            </span>
+          </button>
+
+          {syncSettingsOpen && <SyncSettings />}
         </div>
       ) : (
         <div className="flex flex-col gap-3">
@@ -243,8 +310,8 @@ function SupportSettings() {
 
       <div className="bg-surface-2 rounded-xl p-4 flex flex-col gap-3">
         <div>
-          <p className="text-white text-sm font-medium">Contact</p>
-          <p className="text-slate-400 text-xs mt-1">
+          <p className="text-[var(--arc-text-primary)] text-sm font-medium">Contact</p>
+          <p className="text-[var(--arc-text-secondary)] text-xs mt-1">
             Have a question or feedback? Email us anytime at{" "}
             <a
               href="mailto:arizfaiyazwork@gmail.com"
@@ -256,11 +323,11 @@ function SupportSettings() {
         </div>
         <a
           href="mailto:arizfaiyazwork@gmail.com"
-          className="w-full py-2 rounded-xl text-sm text-slate-300 bg-surface hover:bg-white/10 border border-white/10 transition-all flex items-center justify-center"
+          className="w-full py-2 rounded-xl text-sm text-[var(--arc-text-secondary)] bg-surface hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)] border border-white/10 transition-all flex items-center justify-center"
         >
           Contact Us
         </a>
-        <p className="text-slate-600 text-xs">Version 1.0.0</p>
+        <p className="text-[var(--arc-text-secondary)] text-xs opacity-70">Version 1.0.0</p>
       </div>
     </div>
   );
@@ -300,8 +367,8 @@ function SettingsToggle({
   return (
     <div className="flex items-center justify-between px-4 py-3">
       <div className="flex-1 pr-4">
-        <p className="text-white text-sm">{label}</p>
-        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+        <p className="text-[var(--arc-text-primary)] text-sm">{label}</p>
+        <p className="text-[var(--arc-text-secondary)] text-xs mt-0.5">{description}</p>
       </div>
       {/* Toggle */}
       <button
@@ -340,18 +407,22 @@ function SettingsNumber({
   return (
     <div className="flex items-center justify-between px-4 py-3">
       <div className="flex-1 pr-4">
-        <p className="text-white text-sm">{label}</p>
-        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+        <p className="text-[var(--arc-text-primary)] text-sm">{label}</p>
+        <p className="text-[var(--arc-text-secondary)] text-xs mt-0.5">{description}</p>
       </div>
       <input
         type="number"
         min={min}
         max={max}
         value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
+        onChange={(e) => {
+          const next = Number(e.target.value);
+          if (!Number.isFinite(next)) return;
+          onChange(Math.min(max, Math.max(min, next)));
+        }}
         className={cn(
           "w-20 px-2 py-1 rounded-lg text-sm",
-          "bg-surface-2 text-white border border-white/10",
+          "bg-surface-2 text-[var(--arc-text-primary)] border border-white/10",
           "outline-none focus:border-accent/40",
         )}
       />
@@ -375,15 +446,15 @@ function SettingsSelect({
   return (
     <div className="flex items-center justify-between px-4 py-3">
       <div className="flex-1 pr-4">
-        <p className="text-white text-sm">{label}</p>
-        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+        <p className="text-[var(--arc-text-primary)] text-sm">{label}</p>
+        <p className="text-[var(--arc-text-secondary)] text-xs mt-0.5">{description}</p>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn(
           "px-2 py-1 rounded-lg text-sm",
-          "bg-surface-2 text-white border border-white/10",
+          "bg-surface-2 text-[var(--arc-text-primary)] border border-white/10",
           "outline-none focus:border-accent/40",
         )}
       >
@@ -410,11 +481,21 @@ function SettingsLink({
   return (
     <div className="flex items-center justify-between px-4 py-3">
       <div className="flex-1 pr-4">
-        <p className="text-white text-sm">{label}</p>
-        <p className="text-slate-500 text-xs mt-0.5">{description}</p>
+        <p className="text-[var(--arc-text-primary)] text-sm">{label}</p>
+        <p className="text-[var(--arc-text-secondary)] text-xs mt-0.5">{description}</p>
       </div>
-      <a
-        href={href}
+      <button
+        onClick={() => {
+          if (
+            href.startsWith("chrome://") &&
+            typeof chrome !== "undefined" &&
+            chrome.tabs?.create
+          ) {
+            void chrome.tabs.create({ url: href });
+            return;
+          }
+          window.open(href, "_blank", "noopener,noreferrer");
+        }}
         className={cn(
           "px-3 py-1.5 rounded-lg text-xs",
           "bg-surface-2 text-slate-300 border border-white/10",
@@ -422,7 +503,7 @@ function SettingsLink({
         )}
       >
         Open
-      </a>
+      </button>
     </div>
   );
 }

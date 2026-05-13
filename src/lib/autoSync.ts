@@ -1,6 +1,8 @@
 import { addMapping, getBookmarkMap } from "./chromeBookmarkMap";
+import { FREE_PLAN } from "../config/plans";
 import { createBookmarkFromNode } from "./importBookmarks";
-import type { ArcalistState, Bookmark } from "../types";
+import { getPlanStatus, markDirty } from "./sync/syncStorage";
+import type { ArcalistState, Board, Bookmark } from "../types";
 
 const LAST_SYNC_KEY = "arcalist_last_sync";
 
@@ -55,6 +57,7 @@ export async function autoSyncChromeBookmarks(
 
     const boardUrlMap = buildBoardUrlMap(state);
     const map = await getBookmarkMap();
+    const plan = await getPlanStatus();
     const lastSyncResult = await chrome.storage.local.get(LAST_SYNC_KEY);
     const lastSyncTime = (lastSyncResult[LAST_SYNC_KEY] as number) ?? 0;
     const isFirstSync = lastSyncTime === 0;
@@ -87,7 +90,7 @@ export async function autoSyncChromeBookmarks(
 
     function ensureBoardForFolder(
       folder: chrome.bookmarks.BookmarkTreeNode
-    ) {
+    ): Board | null {
       const folderId = folder.id;
       const mappedId = folderId ? map[folderId] : undefined;
       const folderTitle = folder.title || "Bookmarks";
@@ -98,6 +101,12 @@ export async function autoSyncChromeBookmarks(
       }
 
       if (!board) {
+        if (
+          !plan.isProUser &&
+          targetPage.boards.length >= FREE_PLAN.maxBoardsPerPage
+        ) {
+          return null;
+        }
         board = {
           id: generateId(),
           title: folderTitle,
@@ -122,21 +131,23 @@ export async function autoSyncChromeBookmarks(
       const directBookmarks = collectDirectBookmarks(folder);
       if (directBookmarks.length > 0) {
         const board = ensureBoardForFolder(folder);
-        board.bookmarks = board.bookmarks ?? [];
-        const existingUrls =
-          boardUrlMap.get(board.id) ?? new Set<string>();
-        const before = board.bookmarks.length;
+        if (board) {
+          board.bookmarks = board.bookmarks ?? [];
+          const existingUrls =
+            boardUrlMap.get(board.id) ?? new Set<string>();
+          const before = board.bookmarks.length;
 
-        for (const bm of directBookmarks) {
-          if (!isFirstSync && timestampValue(bm.createdAt) < lastSyncTime) continue;
-          if (existingUrls.has(bm.url)) continue;
-          board.bookmarks.push(bm);
-          existingUrls.add(bm.url);
-        }
+          for (const bm of directBookmarks) {
+            if (!isFirstSync && timestampValue(bm.createdAt) < lastSyncTime) continue;
+            if (existingUrls.has(bm.url)) continue;
+            board.bookmarks.push(bm);
+            existingUrls.add(bm.url);
+          }
 
-        boardUrlMap.set(board.id, existingUrls);
-        if (board.bookmarks.length > before) {
-          hasChanges = true;
+          boardUrlMap.set(board.id, existingUrls);
+          if (board.bookmarks.length > before) {
+            hasChanges = true;
+          }
         }
       }
 
@@ -156,6 +167,7 @@ export async function autoSyncChromeBookmarks(
     if (hasChanges) {
       state.updatedAt = Date.now();
       await chrome.storage.local.set({ arcalist_state: state });
+      await markDirty();
       await chrome.storage.local.set({ [LAST_SYNC_KEY]: Date.now() });
     }
 

@@ -8,6 +8,9 @@ import {
   initializeAutoSync,
   handleAutoSyncAlarm,
 } from "../lib/autoSync";
+import { getPlanStatus, markDirty } from "../lib/sync/syncStorage";
+import { FREE_PLAN } from "../config/plans";
+import { getSafeDomain, normalizeSafeUrl } from "../lib/urlSafety";
 import { getDomainFromUrl, getFaviconForDomain } from "../lib/domain";
 import {
   addDomainTime,
@@ -20,7 +23,7 @@ import {
   type AnalyticsPlanStatus,
   type ProductivityAnalyticsState,
 } from "../lib/productivityAnalytics";
-import type { ArcalistState } from "../types";
+import type { ArcalistState, Board, Page } from "../types";
 
 const STORAGE_KEY = "arcalist_state";
 const ANALYTICS_ALARM_NAME = "arcalist-analytics-flush";
@@ -52,11 +55,7 @@ function favicon(domain: string): string {
 }
 
 function getHostname(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
+  return getSafeDomain(url);
 }
 
 async function getState(): Promise<ArcalistState | null> {
@@ -66,6 +65,7 @@ async function getState(): Promise<ArcalistState | null> {
 
 async function saveState(state: object) {
   await chrome.storage.local.set({ [STORAGE_KEY]: state });
+  await markDirty();
 }
 
 function notifyNewTab() {
@@ -122,8 +122,12 @@ async function flushActiveSession() {
   const elapsedMs = Date.now() - session.startedAt;
   if (elapsedMs < MIN_TRACKED_MS) return;
 
-  const analytics = await getAnalyticsState();
+  const [analytics, plan] = await Promise.all([
+    getAnalyticsState(),
+    getAnalyticsPlanStatus(),
+  ]);
   if (
+    !plan.isProUser ||
     !analytics.trackingEnabled ||
     analytics.excludedDomains.includes(session.domain)
   ) {
@@ -182,6 +186,25 @@ async function startSessionForTab(tab: chrome.tabs.Tab | null) {
     startedAt: Date.now(),
     faviconUrl: tab.favIconUrl || getFaviconForDomain(domain),
   };
+}
+
+function canCreateBackgroundBoard(state: ArcalistState) {
+  return getPlanStatus().then((plan) => {
+    if (plan.isProUser) return true;
+    const firstPage = state.pages?.[0];
+    return (firstPage?.boards?.length ?? 0) < FREE_PLAN.maxBoardsPerPage;
+  });
+}
+
+function createTrashedItemsForBoard(board: Board, page: Page) {
+  return (board.bookmarks ?? []).map((bookmark) => ({
+    bookmark: { ...bookmark, isTrashed: true },
+    deletedAt: Date.now(),
+    fromBoardTitle: board.title,
+    fromPageTitle: page.title,
+    fromBoardId: board.id,
+    fromPageId: page.id,
+  }));
 }
 
 async function restartTrackingForActiveTab(windowId?: number) {
@@ -371,13 +394,10 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url || !tab?.title) return;
-  if (
-    tab.url.startsWith("chrome://") ||
-    tab.url.startsWith("chrome-extension://")
-  )
-    return;
+  const safeUrl = normalizeSafeUrl(tab.url);
+  if (!safeUrl) return;
 
-  const domain = getHostname(tab.url);
+  const domain = getHostname(safeUrl);
   if (!domain) return;
 
   const state = await getState();
@@ -403,7 +423,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   targetBoard.bookmarks.unshift({
     id: generateId(),
     title: tab.title,
-    url: tab.url,
+    url: safeUrl,
     favicon: favicon(domain),
     createdAt: now,
     updatedAt: now,
@@ -426,6 +446,8 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
   const isFolder = !bookmark.url;
 
   if (isFolder) {
+    if (!(await canCreateBackgroundBoard(state))) return;
+
     // User created a new folder in Chrome → create a matching Board in Arcalist
     const newBoard = {
       id: generateId(),
@@ -454,14 +476,16 @@ chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
 
     if (!boardId) return; // Folder not tracked by Arcalist — ignore
 
-    const domain = getHostname(bookmark.url);
+    const safeUrl = normalizeSafeUrl(bookmark.url);
+    if (!safeUrl) return;
+    const domain = getHostname(safeUrl);
     if (!domain) return;
 
     const now = new Date().toISOString();
     const newBookmark = {
       id: generateId(),
       title: bookmark.title || domain,
-      url: bookmark.url,
+      url: safeUrl,
       favicon: favicon(domain),
       chromeBookmarkId: id,
       createdAt: now,
@@ -525,12 +549,21 @@ chrome.bookmarks.onRemoved.addListener(async (id) => {
   const state = await getState();
   if (!state) return;
 
-  // Remove the matching board from Arcalist
+  // Move the matching board's bookmarks to trash before removing the board.
+  const trashedItems = [];
   for (const page of state.pages) {
+    const board = page.boards?.find(
+      (b: { id: string }) => b.id === boardId,
+    ) as Board | undefined;
+    if (board) {
+      trashedItems.push(...createTrashedItemsForBoard(board, page));
+    }
     page.boards = (page.boards ?? []).filter(
       (b: { id: string }) => b.id !== boardId,
     );
   }
+  state.trash = [...(state.trash ?? []), ...trashedItems];
+  state.updatedAt = Date.now();
 
   await saveState(state);
   await removeMapping(id);

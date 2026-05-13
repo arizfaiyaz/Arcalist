@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { browserApi } from "./browserApi";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -11,25 +12,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: {
       getItem: async (key: string) => {
-        if (typeof chrome !== "undefined" && chrome.storage) {
-          const result = await chrome.storage.local.get(key);
-          return (result[key] as string | null) ?? null;
-        }
-        return localStorage.getItem(key);
+        const result = await browserApi.storage.get<Record<string, string | null>>(key);
+        return result[key] ?? null;
       },
       setItem: async (key: string, value: string) => {
-        if (typeof chrome !== "undefined" && chrome.storage) {
-          await chrome.storage.local.set({ [key]: value });
-        } else {
-          localStorage.setItem(key, value);
-        }
+        await browserApi.storage.set({ [key]: value });
       },
       removeItem: async (key: string) => {
-        if (typeof chrome !== "undefined" && chrome.storage) {
-          await chrome.storage.local.remove(key);
-        } else {
-          localStorage.removeItem(key);
-        }
+        await browserApi.storage.remove(key);
       },
     },
     detectSessionInUrl: true,

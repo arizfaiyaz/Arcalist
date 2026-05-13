@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import { useArcalistStore } from '../../store/useArcalistStore'
 import { usePlanLimits } from '../../hooks/usePlanLimits'
 import { getVisiblePagesForPlan } from '../../lib/planLimits'
+import { getSafeDomain, normalizeSafeUrl } from '../../lib/urlSafety'
 
 type ParsedBookmark = {
   title: string
@@ -40,13 +41,16 @@ export function ImportDialog({ open, onClose }: Props) {
     const links = Array.from(doc.querySelectorAll('a'))
 
     return links
-      .filter((a) => a.href && a.href.startsWith('http'))
+      .map((a) => ({
+        title: a.textContent?.trim() ?? "",
+        url: normalizeSafeUrl(a.getAttribute('href') ?? a.href),
+      }))
+      .filter((item): item is { title: string; url: string } => Boolean(item.url))
       .map((a) => {
-        let domain: string
-        try { domain = new URL(a.href).hostname } catch { domain = '' }
+        const domain = getSafeDomain(a.url) ?? ''
         return {
-          title: a.textContent?.trim() || domain,
-          url: a.href,
+          title: a.title || domain,
+          url: a.url,
           favicon: `https://www.google.com/s2/favicons?domain=${domain}&sz=32`,
         }
       })
