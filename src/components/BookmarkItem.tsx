@@ -39,6 +39,14 @@ export function BookmarkItem({
   const menuRef = useRef<HTMLDivElement>(null);
   const [isHovered, setIsHovered] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const rowActionClass = cn(
+    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+    "opacity-0 pointer-events-none -translate-x-1",
+    "transition-all duration-150",
+    "group-hover/bookmark:opacity-100 group-hover/bookmark:pointer-events-auto group-hover/bookmark:translate-x-0",
+    "group-focus-within/bookmark:opacity-100 group-focus-within/bookmark:pointer-events-auto group-focus-within/bookmark:translate-x-0",
+    "text-[var(--arc-text-secondary)]",
+  );
 
   const {
     attributes,
@@ -103,7 +111,7 @@ export function BookmarkItem({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "group flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
+          "group/bookmark flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
           "hover:bg-[var(--arc-button-bg)] transition-colors duration-150",
           isSelected && "border border-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]",
         )}
@@ -140,8 +148,8 @@ export function BookmarkItem({
             type="button"
             aria-label={`Reorder ${bookmark.title}`}
             className={cn(
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md opacity-0 group-hover:opacity-100 transition-opacity",
-              "text-[var(--arc-text-secondary)] opacity-60 hover:bg-[var(--arc-button-hover-bg)] hover:opacity-100 cursor-grab active:cursor-grabbing touch-none",
+              rowActionClass,
+              "hover:bg-[var(--arc-button-hover-bg)] cursor-grab active:cursor-grabbing touch-none",
             )}
           >
             <GripVertical size={12} />
@@ -188,7 +196,7 @@ export function BookmarkItem({
                 "text-sm leading-none",
                 shortenTitles ? "truncate" : "whitespace-normal break-words",
                 "transition-all duration-200 select-none",
-                "text-[var(--arc-text-primary)] opacity-85 group-hover:opacity-100",
+                "text-[var(--arc-text-primary)] opacity-85 group-hover/bookmark:opacity-100",
                 privacyMode && !isHovered && "blur-sm",
               )}
             >
@@ -209,9 +217,8 @@ export function BookmarkItem({
           onClick={() => setEditOpen(true)}
           aria-label={`Edit ${bookmark.title}`}
           className={cn(
-            "opacity-0 group-hover:opacity-100 transition-opacity",
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-            "text-[var(--arc-text-secondary)] opacity-60 hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)] hover:opacity-100",
+            rowActionClass,
+            "hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)]",
           )}
           title="Edit bookmark"
         >
@@ -222,9 +229,8 @@ export function BookmarkItem({
           onClick={handleTrash}
           aria-label={`Move ${bookmark.title} to trash`}
           className={cn(
-            "opacity-0 group-hover:opacity-100 transition-opacity",
-            "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-            "text-[var(--arc-text-secondary)] opacity-60 hover:bg-red-400/10 hover:text-red-400 hover:opacity-100",
+            rowActionClass,
+            "hover:bg-red-400/10 hover:text-red-400",
           )}
         >
           <Trash2 size={10} />

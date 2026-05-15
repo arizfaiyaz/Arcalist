@@ -18,11 +18,10 @@ import { usePlanLimits } from "../hooks/usePlanLimits";
 import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
 import {
-  getLockedBoardCountForPlan,
-  getLockedPageCountForPlan,
-  getVisiblePagesForPlan,
+  getVisibleWorkspaceForPlan,
+  type PlanVisibleBoard,
 } from "../lib/planLimits";
-import type { Page } from "../types";
+import type { Board, Page } from "../types";
 
 export function NewTabPage() {
   const pages = useArcalistStore((state) => state.pages);
@@ -36,14 +35,12 @@ export function NewTabPage() {
   const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
   const planLimits = usePlanLimits();
   const { effectiveTheme } = useTheme();
-  const visiblePages = useMemo(
-    () => getVisiblePagesForPlan(pages, planLimits),
+  const visibleWorkspace = useMemo(
+    () => getVisibleWorkspaceForPlan({ pages, limits: planLimits }),
     [pages, planLimits],
   );
-  const lockedPageCount = useMemo(
-    () => getLockedPageCountForPlan(pages, planLimits),
-    [pages, planLimits],
-  );
+  const visiblePages = visibleWorkspace.visiblePages;
+  const lockedPageCount = visibleWorkspace.hiddenPageCount;
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -53,6 +50,9 @@ export function NewTabPage() {
   const [analyticsOpen, setAnalyticsOpen] = useState(false);
   const [sharePage, setSharePage] = useState<Page | null>(null);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const [activeVisiblePageId, setActiveVisiblePageId] = useState<string | null>(
+    null,
+  );
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string;
@@ -65,13 +65,38 @@ export function NewTabPage() {
   const wallpaperMenuRef = useRef<HTMLDivElement>(null);
 
   const activePage =
-    visiblePages.find((p) => p.id === activePageId) ?? visiblePages[0];
+    visiblePages.find((p) => p.id === activeVisiblePageId) ??
+    visiblePages.find(
+      (p) => p.id === activePageId || p.originalPageId === activePageId,
+    ) ??
+    visiblePages[0];
   const activeFullPage =
-    pages.find((p) => p.id === activePage?.id) ?? pages[0];
-  const lockedBoardCount = getLockedBoardCountForPlan(
-    activeFullPage,
-    planLimits,
+    pages.find((p) => p.id === activePage?.originalPageId) ??
+    pages.find((p) => p.id === activePage?.id) ??
+    pages[0];
+  const lastVisiblePage = visiblePages[visiblePages.length - 1];
+  const lockedBoardCount =
+    activePage?.id === lastVisiblePage?.id
+      ? visibleWorkspace.hiddenBoardCount
+      : 0;
+  const totalBoardCount = pages.reduce(
+    (count, page) => count + (page.boards?.length ?? 0),
+    0,
   );
+  const totalFreeBoardCapacity =
+    planLimits.maxPages * planLimits.maxBoardsPerPage;
+  const canAddBoardToActivePage =
+    Boolean(activePage && activeFullPage) &&
+    !activePage?.isVirtualOverflowPage &&
+    planLimits.canCreateBoard(activeFullPage?.boards?.length ?? 0) &&
+    (planLimits.isProUser || totalBoardCount < totalFreeBoardCapacity);
+  const activePageHasRedistributedBoards =
+    !planLimits.isProUser &&
+    Boolean(
+      activePage?.boards.some(
+        (board) => board.originalPageId !== activePage.originalPageId,
+      ),
+    );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -97,17 +122,6 @@ export function NewTabPage() {
   useEffect(() => {
     void setAnalyticsPlanStatus(planLimits.isProUser, planLimits.planName);
   }, [planLimits.isProUser, planLimits.planName]);
-
-  useEffect(() => {
-    if (!activePage && visiblePages[0]) {
-      setActivePage(visiblePages[0].id);
-      return;
-    }
-
-    if (activePage && activePage.id !== activePageId) {
-      setActivePage(activePage.id);
-    }
-  }, [activePage, activePageId, setActivePage, visiblePages]);
 
   useEffect(() => {
     if (!wallpaperOpen) return;
@@ -186,6 +200,21 @@ export function NewTabPage() {
     setSharePage(page);
   };
 
+  const handlePageChange = (pageId: string) => {
+    const nextPage = visiblePages.find((page) => page.id === pageId);
+    if (!nextPage) return;
+
+    setActiveVisiblePageId(nextPage.id);
+    if (!nextPage.isVirtualOverflowPage) {
+      setActivePage(nextPage.originalPageId);
+    }
+  };
+
+  const getBoardPageId = (board: Board) =>
+    (board as PlanVisibleBoard).originalPageId ||
+    activePage.originalPageId ||
+    activePage.id;
+
   const handleBookmarkSelect = (bookmarkId: string, boardId: string) => {
     setSelectedBookmarks((prev) => {
       const exists = prev.find((b) => b.id === bookmarkId);
@@ -243,7 +272,7 @@ export function NewTabPage() {
           <PageNav
             pages={visiblePages}
             activePageId={activePage?.id ?? activePageId}
-            onPageChange={setActivePage}
+            onPageChange={handlePageChange}
             onAddPage={addPage}
             onDeletePage={deletePage}
             onRenamePage={renamePage}
@@ -260,6 +289,9 @@ export function NewTabPage() {
             onBookmarkSelect={handleBookmarkSelect}
             lockedBoardCount={lockedBoardCount}
             onBoardLimitReached={showBoardUpgradePrompt}
+            canAddBoardOverride={canAddBoardToActivePage}
+            getBoardPageId={getBoardPageId}
+            disableBoardReorder={activePageHasRedistributedBoards}
           />
         </div>
       </main>

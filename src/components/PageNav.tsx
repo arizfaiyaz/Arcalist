@@ -13,8 +13,12 @@ import { cn } from "../lib/utils";
 import { useArcalistStore } from "../store/useArcalistStore";
 import type { Page } from "../types";
 
+type NavPage = Page & {
+  isVirtualOverflowPage?: boolean;
+};
+
 type Props = {
-  pages: Page[];
+  pages: NavPage[];
   activePageId: string;
   onPageChange: (id: string) => void;
   onAddPage: (title: string) => boolean;
@@ -41,6 +45,10 @@ export function PageNav({
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [openMenuPageId, setOpenMenuPageId] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const user = useArcalistStore((state) => state.user);
@@ -81,6 +89,16 @@ export function PageNav({
     setOpenMenuPageId(null);
   };
 
+  const handleDelete = (page: Page) => {
+    const confirmed = window.confirm(
+      `Delete "${page.title}" page? Its bookmarks will move to Trash.`,
+    );
+    if (confirmed) {
+      onDeletePage(page.id);
+    }
+    setOpenMenuPageId(null);
+  };
+
   return (
     <nav
       className={cn(
@@ -95,6 +113,7 @@ export function PageNav({
         {pages.map((page) => {
           const isActive = page.id === activePageId;
           const menuOpen = page.id === openMenuPageId;
+          const isVirtualPage = Boolean(page.isVirtualOverflowPage);
           return (
             <div key={page.id} className="relative flex items-center group">
               <div
@@ -108,7 +127,10 @@ export function PageNav({
               >
                 <button
                   type="button"
-                  onClick={() => onPageChange(page.id)}
+                  onClick={() => {
+                    setOpenMenuPageId(null);
+                    onPageChange(page.id);
+                  }}
                   className="min-w-0 max-w-44 truncate py-1.5 pl-4 pr-1 text-left"
                   title={page.title}
                 >
@@ -116,8 +138,14 @@ export function PageNav({
                 </button>
                 <button
                   type="button"
+                  onMouseDown={(e) => e.stopPropagation()}
                   onClick={(e) => {
                     e.stopPropagation();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setMenuPosition({
+                      left: rect.left,
+                      top: rect.bottom + 6,
+                    });
                     setOpenMenuPageId((current) =>
                       current === page.id ? null : page.id,
                     );
@@ -139,18 +167,27 @@ export function PageNav({
                 <div
                   ref={menuRef}
                   className={cn(
-                    "absolute left-0 top-9 z-30 w-44 overflow-hidden rounded-xl",
+                    "fixed z-[80] w-48 overflow-hidden rounded-xl",
                     "arc-menu p-1.5",
                   )}
+                  style={
+                    menuPosition
+                      ? {
+                          left: `${menuPosition.left}px`,
+                          top: `${menuPosition.top}px`,
+                        }
+                      : undefined
+                  }
                 >
                   <PageMenuItem
                     icon={Pencil}
-                    label="Rename page"
+                    label="Rename/Edit Page"
+                    disabled={isVirtualPage}
                     onClick={() => handleRename(page)}
                   />
                   <PageMenuItem
                     icon={Share2}
-                    label="Share page"
+                    label="Share Page"
                     badge={shareLocked ? "Pro" : undefined}
                     onClick={() => {
                       setOpenMenuPageId(null);
@@ -160,12 +197,10 @@ export function PageNav({
                   {pages.length > 1 && (
                     <PageMenuItem
                       icon={Trash2}
-                      label="Delete page"
+                      label="Delete Page"
                       danger
-                      onClick={() => {
-                        setOpenMenuPageId(null);
-                        onDeletePage(page.id);
-                      }}
+                      disabled={isVirtualPage}
+                      onClick={() => handleDelete(page)}
                     />
                   )}
                 </div>
@@ -268,20 +303,24 @@ function PageMenuItem({
   onClick,
   badge,
   danger = false,
+  disabled = false,
 }: {
   icon: React.ElementType;
   label: string;
   onClick: () => void;
   badge?: string;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={onClick}
       className={cn(
         "arc-menu-item",
-        danger
+        disabled && "cursor-not-allowed opacity-45 hover:bg-transparent",
+        danger && !disabled
           ? "hover:bg-red-400/10 hover:text-red-400"
           : "",
       )}

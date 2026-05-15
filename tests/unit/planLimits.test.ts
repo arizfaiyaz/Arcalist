@@ -4,6 +4,7 @@ import {
   getLockedBoardCountForPlan,
   getLockedPageCountForPlan,
   getUserPlanLimits,
+  getVisibleWorkspaceForPlan,
   getVisiblePagesForPlan,
   normalizeWorkspaceState,
 } from "../../src/lib/planLimits";
@@ -32,12 +33,65 @@ describe("plan limits", () => {
       pages: Array.from({ length: 5 }, (_, index) => createPage(index, 12)),
     });
     const limits = getUserPlanLimits(null);
-    const visiblePages = getVisiblePagesForPlan(state.pages, limits);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+    const visiblePages = workspace.visiblePages;
 
     expect(visiblePages).toHaveLength(3);
     expect(visiblePages[0].boards).toHaveLength(10);
+    expect(visiblePages[1].boards).toHaveLength(10);
+    expect(visiblePages[2].boards).toHaveLength(10);
+    expect(workspace.hiddenBoardCount).toBe(30);
     expect(getLockedPageCountForPlan(state.pages, limits)).toBe(2);
     expect(getLockedBoardCountForPlan(state.pages[0], limits)).toBe(2);
+  });
+
+  it("distributes old over-limit free boards across visible pages without mutation", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 25)],
+    });
+    const originalPageId = state.pages[0].id;
+    const originalBoardPageCounts = state.pages.map((page) => page.boards.length);
+    const limits = getUserPlanLimits(null);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages).toHaveLength(3);
+    expect(workspace.visiblePages.map((page) => page.boards.length)).toEqual([
+      10, 10, 5,
+    ]);
+    expect(workspace.visiblePages[1].isVirtualOverflowPage).toBe(true);
+    expect(workspace.visiblePages[1].boards[0].originalPageId).toBe(
+      originalPageId,
+    );
+    expect(workspace.hiddenBoardCount).toBe(0);
+    expect(state.pages.map((page) => page.boards.length)).toEqual(
+      originalBoardPageCounts,
+    );
+    expect(state.pages).toHaveLength(1);
+  });
+
+  it("reports hidden free boards only after all free slots are filled", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 35)],
+    });
+    const limits = getUserPlanLimits(null);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages).toHaveLength(3);
+    expect(workspace.visiblePages.map((page) => page.boards.length)).toEqual([
+      10, 10, 10,
+    ]);
+    expect(workspace.hiddenBoardCount).toBe(5);
+    expect(workspace.hasHiddenData).toBe(true);
+    expect(state.pages[0].boards).toHaveLength(35);
   });
 
   it("allows pro users to see and create beyond free limits", () => {
@@ -90,4 +144,3 @@ describe("plan limits", () => {
     expect(normalized.pages[1].boards[0].id).toBe("board-99");
   });
 });
-

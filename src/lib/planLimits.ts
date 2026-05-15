@@ -12,6 +12,23 @@ export type UserPlanLimits = {
   canCreateBoard: (currentBoardCountForPage: number) => boolean;
 };
 
+export type PlanVisibleBoard = Board & {
+  originalPageId: string;
+};
+
+export type PlanVisiblePage = Omit<Page, "boards"> & {
+  boards: PlanVisibleBoard[];
+  originalPageId: string;
+  isVirtualOverflowPage?: boolean;
+};
+
+export type PlanVisibilityResult = {
+  visiblePages: PlanVisiblePage[];
+  hiddenBoardCount: number;
+  hiddenPageCount: number;
+  hasHiddenData: boolean;
+};
+
 const getMetadataPlan = (user: User | null | undefined): PlanName | null => {
   const metadataPlan =
     user?.user_metadata?.plan ??
@@ -62,15 +79,7 @@ export const getVisiblePagesForPlan = (
   pages: Page[],
   limits: UserPlanLimits,
 ) => {
-  const orderedPages = byOrder(pages ?? []);
-  const visiblePages = limits.isProUser
-    ? orderedPages
-    : orderedPages.slice(0, limits.maxPages);
-
-  return visiblePages.map((page) => ({
-    ...page,
-    boards: getVisibleBoardsForPlan(page.boards ?? [], limits),
-  }));
+  return getVisibleWorkspaceForPlan({ pages, limits }).visiblePages;
 };
 
 export const getLockedPageCountForPlan = (
@@ -85,6 +94,104 @@ export const getLockedBoardCountForPlan = (
   limits.isProUser
     ? 0
     : Math.max(0, (page?.boards?.length ?? 0) - limits.maxBoardsPerPage);
+
+export const getVisibleWorkspaceForPlan = ({
+  pages,
+  limits,
+  isProUser = limits.isProUser,
+  maxPages = limits.maxPages,
+  maxBoardsPerPage = limits.maxBoardsPerPage,
+}: {
+  pages: Page[];
+  limits: UserPlanLimits;
+  isProUser?: boolean;
+  maxPages?: number;
+  maxBoardsPerPage?: number;
+}): PlanVisibilityResult => {
+  const orderedPages = byOrder(pages ?? []);
+
+  if (isProUser) {
+    const visiblePages: PlanVisiblePage[] = orderedPages.map((page) => ({
+      ...page,
+      boards: byOrder(page.boards ?? []).map((board) => ({
+        ...board,
+        originalPageId: page.id,
+      })),
+      originalPageId: page.id,
+    }));
+
+    return {
+      visiblePages,
+      hiddenBoardCount: 0,
+      hiddenPageCount: 0,
+      hasHiddenData: false,
+    };
+  }
+
+  const visiblePageLimit = Number.isFinite(maxPages) ? maxPages : orderedPages.length;
+  const visibleBoardLimit = Number.isFinite(maxBoardsPerPage)
+    ? maxBoardsPerPage
+    : Infinity;
+  const totalVisibleBoardSlots =
+    visiblePageLimit === Infinity || visibleBoardLimit === Infinity
+      ? Infinity
+      : visiblePageLimit * visibleBoardLimit;
+  const orderedBoards = orderedPages.flatMap((page) =>
+    byOrder(page.boards ?? []).map((board) => ({
+      ...board,
+      originalPageId: page.id,
+    })),
+  );
+  const visibleBoards = orderedBoards.slice(0, totalVisibleBoardSlots);
+  const existingVisiblePageCount = Math.min(orderedPages.length, visiblePageLimit);
+  const neededPageCount = Math.min(
+    visiblePageLimit,
+    Math.max(
+      existingVisiblePageCount,
+      Math.ceil(visibleBoards.length / visibleBoardLimit),
+    ),
+  );
+
+  const visiblePages: PlanVisiblePage[] = Array.from(
+    { length: neededPageCount },
+    (_, index) => {
+      const originalPage = orderedPages[index];
+      const boards =
+        visibleBoardLimit === Infinity
+          ? visibleBoards
+          : visibleBoards.slice(
+              index * visibleBoardLimit,
+              (index + 1) * visibleBoardLimit,
+            );
+
+      if (originalPage) {
+        return {
+          ...originalPage,
+          boards,
+          originalPageId: originalPage.id,
+        };
+      }
+
+      return {
+        id: `virtual-free-overflow-page-${index + 1}`,
+        title: `Page ${index + 1}`,
+        order: index,
+        boards,
+        originalPageId: "",
+        isVirtualOverflowPage: true,
+      };
+    },
+  );
+
+  return {
+    visiblePages,
+    hiddenBoardCount: Math.max(0, orderedBoards.length - totalVisibleBoardSlots),
+    hiddenPageCount: Math.max(0, orderedPages.length - visiblePageLimit),
+    hasHiddenData:
+      orderedBoards.length > totalVisibleBoardSlots ||
+      orderedPages.length > visiblePageLimit,
+  };
+};
 
 const cloneBoard = (board: Board): Board => ({
   ...board,
@@ -155,4 +262,3 @@ export const normalizeWorkspaceState = (state: ArcalistState): ArcalistState => 
     overflowBoards: [],
   };
 };
-

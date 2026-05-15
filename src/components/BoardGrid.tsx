@@ -32,6 +32,9 @@ type Props = {
   onBookmarkSelect?: (bookmarkId: string, boardId: string) => void;
   lockedBoardCount?: number;
   onBoardLimitReached?: () => void;
+  canAddBoardOverride?: boolean;
+  getBoardPageId?: (board: Board) => string;
+  disableBoardReorder?: boolean;
 };
 
 //-------------------------
@@ -43,14 +46,18 @@ export function BoardGrid({
   onBookmarkSelect,
   lockedBoardCount = 0,
   onBoardLimitReached,
+  canAddBoardOverride,
+  getBoardPageId,
+  disableBoardReorder = false,
 }: Props) {
   const addBoard = useArcalistStore((state) => state.addBoard);
   const reorderBoards = useArcalistStore((state) => state.reorderBoards);
   const reorderBookmarks = useArcalistStore((state) => state.reorderBookmarks);
   const compactMode = useArcalistStore((state) => state.settings.compactMode);
-  const canAddBoard = useArcalistStore((state) =>
+  const storeCanAddBoard = useArcalistStore((state) =>
     state.canCreateBoard(page.id),
   );
+  const canAddBoard = canAddBoardOverride ?? storeCanAddBoard;
 
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -154,6 +161,7 @@ export function BoardGrid({
 
     // ── Board reorder ──
     if (activeData?.type === "board" && overData?.type === "board") {
+      if (disableBoardReorder) return;
       const oldIndex = page.boards.findIndex((b) => b.id === active.id);
       const newIndex = page.boards.findIndex((b) => b.id === over.id);
       if (oldIndex !== newIndex) {
@@ -249,7 +257,7 @@ export function BoardGrid({
                   <div key={board.id} className="break-inside-avoid mb-4">
                     <BoardCard
                       board={board}
-                      pageId={page.id}
+                      pageId={getBoardPageId?.(board) ?? page.id}
                       multiSelectMode={multiSelectMode}
                       selectedBookmarks={selectedBookmarks}
                       onBookmarkSelect={onBookmarkSelect}
@@ -346,7 +354,11 @@ function LockedBoardCard({
         <Lock size={15} />
       </div>
       <p className="text-sm font-semibold text-amber-100">
-        {count} extra {count === 1 ? "board" : "boards"} saved
+        {count} extra {count === 1 ? "board is" : "boards are"} saved but
+        hidden on the Free plan.
+      </p>
+      <p className="mt-1 text-xs leading-5 text-amber-100/75">
+        Upgrade to Pro to unlock unlimited boards.
       </p>
     </button>
   );
