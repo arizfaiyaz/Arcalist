@@ -1,4 +1,4 @@
-import type { PlanName } from "../config/plans";
+import type { PlanName } from "./planLimits";
 import {
   categorizeDomain,
   type DomainCategory,

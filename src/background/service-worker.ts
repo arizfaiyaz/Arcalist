@@ -8,12 +8,13 @@ import {
   initializeAutoSync,
   handleAutoSyncAlarm,
 } from "../lib/autoSync";
-import { getPlanStatus, markDirty } from "../lib/sync/syncStorage";
+import { markDirty } from "../lib/sync/syncStorage";
 import {
   getStoredAuthState,
   getWorkspaceStorageKey,
 } from "../lib/storage";
-import { FREE_PLAN } from "../config/plans";
+import { FREE_LIMITS } from "../lib/planLimits";
+import { resolveAuthenticatedPlanStatus } from "../lib/plan";
 import { getSafeDomain, normalizeSafeUrl } from "../lib/urlSafety";
 import { getDomainFromUrl, getFaviconForDomain } from "../lib/domain";
 import {
@@ -98,16 +99,22 @@ async function saveAnalyticsState(state: ProductivityAnalyticsState) {
   await chrome.storage.local.set({ [ANALYTICS_STORAGE_KEY]: state });
 }
 
-async function getAnalyticsPlanStatus(): Promise<AnalyticsPlanStatus> {
-  const result = await chrome.storage.local.get(ANALYTICS_PLAN_STORAGE_KEY);
-  const stored = result[ANALYTICS_PLAN_STORAGE_KEY] as
-    | Partial<AnalyticsPlanStatus>
-    | undefined;
+function defaultAnalyticsPlanStatus(): AnalyticsPlanStatus {
   return {
-    isProUser: stored?.isProUser ?? false,
-    planName: stored?.planName === "pro" ? "pro" : "free",
-    updatedAt: stored?.updatedAt ?? new Date().toISOString(),
+    isProUser: false,
+    planName: "free",
+    updatedAt: new Date().toISOString(),
   };
+}
+
+async function getAnalyticsPlanStatus(): Promise<AnalyticsPlanStatus> {
+  const authState = await getStoredAuthState();
+  if (!authState.isAuthenticated || !authState.userId) {
+    return defaultAnalyticsPlanStatus();
+  }
+
+  const resolved = await resolveAuthenticatedPlanStatus(authState.userId);
+  return resolved.isProUser ? resolved : defaultAnalyticsPlanStatus();
 }
 
 async function canTrackAnalytics() {
@@ -209,11 +216,46 @@ async function startSessionForTab(tab: chrome.tabs.Tab | null) {
 }
 
 function canCreateBackgroundBoard(state: ArcalistState) {
-  return getPlanStatus().then((plan) => {
+  return resolveAuthenticatedPlanStatus().then((plan) => {
     if (plan.isProUser) return true;
     const firstPage = state.pages?.[0];
-    return (firstPage?.boards?.length ?? 0) < FREE_PLAN.maxBoardsPerPage;
+    return (firstPage?.boards?.length ?? 0) < FREE_LIMITS.boardsPerPage;
   });
+}
+
+function isAnalyticsPlanStatus(value: unknown): value is AnalyticsPlanStatus {
+  if (!value || typeof value !== "object") return false;
+  const plan = value as Partial<AnalyticsPlanStatus>;
+  return (
+    typeof plan.isProUser === "boolean" &&
+    (plan.planName === "free" || plan.planName === "pro") &&
+    typeof plan.updatedAt === "string"
+  );
+}
+
+function isAnalyticsMessage(
+  message: unknown,
+): message is AnalyticsMessage {
+  if (!message || typeof message !== "object") return false;
+  const candidate = message as Partial<AnalyticsMessage> & {
+    type?: string;
+    enabled?: unknown;
+    plan?: unknown;
+  };
+
+  switch (candidate.type) {
+    case "ANALYTICS_FLUSH_ACTIVE_SESSION":
+    case "ANALYTICS_GET_STATS":
+    case "ANALYTICS_CLEAR_TODAY":
+    case "ANALYTICS_CLEAR_ALL":
+      return true;
+    case "ANALYTICS_SET_TRACKING_ENABLED":
+      return typeof candidate.enabled === "boolean";
+    case "ANALYTICS_SET_PLAN_STATUS":
+      return isAnalyticsPlanStatus(candidate.plan);
+    default:
+      return false;
+  }
 }
 
 function createTrashedItemsForBoard(board: Board, page: Page) {
@@ -316,20 +358,23 @@ chrome.idle?.onStateChanged?.addListener((newState) => {
 
 chrome.runtime.onMessage.addListener(
   (
-    message: AnalyticsMessage | { type: string },
+    message: unknown,
     _sender,
     sendResponse,
   ) => {
-    if (!message?.type?.startsWith("ANALYTICS_")) return false;
+    const type = (message as { type?: unknown })?.type;
+    if (typeof type !== "string" || !type.startsWith("ANALYTICS_")) return false;
 
     void (async () => {
       try {
-        const analyticsMessage = message as AnalyticsMessage;
+        if (!isAnalyticsMessage(message)) {
+          sendResponse({ ok: false, error: "Invalid analytics message." });
+          return;
+        }
+
+        const analyticsMessage = message;
         const authState = await getStoredAuthState();
-        if (
-          analyticsMessage.type !== "ANALYTICS_SET_PLAN_STATUS" &&
-          (!authState.isAuthenticated || !authState.userId)
-        ) {
+        if (!authState.isAuthenticated || !authState.userId) {
           activeSession = null;
           sendResponse({
             ok: false,
@@ -398,10 +443,13 @@ chrome.runtime.onMessage.addListener(
         }
 
         if (analyticsMessage.type === "ANALYTICS_SET_PLAN_STATUS") {
+          const resolvedPlan = await resolveAuthenticatedPlanStatus(
+            authState.userId,
+          );
           await chrome.storage.local.set({
-            [ANALYTICS_PLAN_STORAGE_KEY]: analyticsMessage.plan,
+            [ANALYTICS_PLAN_STORAGE_KEY]: resolvedPlan,
           });
-          if (analyticsMessage.plan.isProUser) {
+          if (resolvedPlan.isProUser) {
             await restartTrackingForActiveTab();
           } else {
             await flushActiveSession();

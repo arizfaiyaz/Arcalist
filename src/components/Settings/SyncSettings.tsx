@@ -10,6 +10,7 @@ import {
 import { cn } from "../../lib/utils";
 import { useCrossBrowserSync } from "../../hooks/useCrossBrowserSync";
 import { UpgradePromptModal } from "../UpgradePromptModal";
+import { canUseCrossBrowserSync } from "../../lib/planLimits";
 import type { SyncStatus } from "../../types/sync";
 
 function statusLabel(status: SyncStatus | undefined) {
@@ -50,9 +51,10 @@ export function SyncSettings() {
     useCrossBrowserSync();
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [busy, setBusy] = useState(false);
+  const syncAllowed = canUseCrossBrowserSync(isProUser);
 
   const handleToggle = async () => {
-    if (!isProUser) {
+    if (!syncAllowed) {
       setShowUpgrade(true);
       return;
     }
@@ -62,7 +64,7 @@ export function SyncSettings() {
   };
 
   const handleManualSync = async () => {
-    if (!isProUser) {
+    if (!syncAllowed) {
       setShowUpgrade(true);
       return;
     }
@@ -86,7 +88,7 @@ export function SyncSettings() {
               <p className="text-sm font-medium text-[var(--arc-text-primary)]">
                 Cross-browser Sync
               </p>
-              {!isProUser && (
+              {!syncAllowed && (
                 <span className="rounded-md border border-[var(--arc-accent)]/30 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--arc-accent)]">
                   Pro
                 </span>
@@ -97,7 +99,7 @@ export function SyncSettings() {
             </p>
           </div>
 
-          {isProUser ? (
+          {syncAllowed ? (
             <div
               className={cn(
                 "h-6 w-10 shrink-0 rounded-full p-1 transition-colors",

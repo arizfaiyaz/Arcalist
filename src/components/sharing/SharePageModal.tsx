@@ -27,12 +27,19 @@ type Props = {
   open: boolean;
   page: Page | null;
   userId: string | null;
+  isProUser: boolean;
   onClose: () => void;
 };
 
 type BusyState = "loading" | "creating" | "copying" | "updating" | "revoking" | "regenerating" | null;
 
-export function SharePageModal({ open, page, userId, onClose }: Props) {
+export function SharePageModal({
+  open,
+  page,
+  userId,
+  isProUser,
+  onClose,
+}: Props) {
   const [share, setShare] = useState<SharedPageRecord | null>(null);
   const [busy, setBusy] = useState<BusyState>(null);
   const [error, setError] = useState("");
@@ -88,7 +95,7 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
 
   const handleCreate = () =>
     run("creating", async () => {
-      const created = await createPageShare({ userId, page });
+      const created = await createPageShare({ userId, page, isProUser });
       setShare(created.share);
       setSuccess("Share link created.");
       await copyText(created.shareUrl);
@@ -111,6 +118,7 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
           pageId: page.id,
           shareId: share.id,
           snapshot,
+          isProUser,
         }),
       );
       setSuccess("Shared page snapshot updated.");
@@ -139,6 +147,7 @@ export function SharePageModal({ open, page, userId, onClose }: Props) {
       const regenerated = await regeneratePageShare({
         userId,
         page,
+        isProUser,
         oldShareId: share.id,
       });
       setShare(regenerated.share);

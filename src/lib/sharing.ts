@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { resolveAuthenticatedPlanStatus } from "./plan";
 import { normalizeSafeUrl } from "./urlSafety";
 import type { Page } from "../types";
 import type {
@@ -12,6 +13,7 @@ const DEFAULT_SHARE_BASE_URL = "https://arcalist.app";
 type ShareParams = {
   userId: string;
   page: Page;
+  isProUser: boolean;
   baseUrl?: string;
 };
 
@@ -24,6 +26,17 @@ type ShareMutationParams = {
   userId: string;
   shareId: string;
 };
+
+async function requirePageSharingPro(userId: string, isProUser: boolean) {
+  if (!userId) throw new Error("Sign in to Arcalist to share pages.");
+  if (!isProUser) {
+    throw new Error("Page sharing is available with Arcalist Pro.");
+  }
+  const resolvedPlan = await resolveAuthenticatedPlanStatus(userId);
+  if (!resolvedPlan.isProUser) {
+    throw new Error("Page sharing is available with Arcalist Pro.");
+  }
+}
 
 export function getShareBaseUrl(baseUrl?: string): string {
   return (
@@ -96,12 +109,17 @@ export async function getShareForPage({
 export async function createPageShare({
   userId,
   page,
+  isProUser,
   baseUrl,
 }: ShareParams): Promise<{ share: SharedPageRecord; shareUrl: string }> {
+  await requirePageSharingPro(userId, isProUser);
+
   const shareToken = generateShareToken();
   const snapshot = buildSharedPageSnapshot(page);
   const now = new Date().toISOString();
 
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { data, error } = await supabase
     .from("shared_pages")
     .insert({
@@ -130,10 +148,16 @@ export async function updatePageShareSnapshot({
   pageId,
   shareId,
   snapshot,
+  isProUser,
 }: ShareMutationParams & {
   pageId: string;
   snapshot: SharedPageSnapshot;
+  isProUser: boolean;
 }): Promise<SharedPageRecord> {
+  await requirePageSharingPro(userId, isProUser);
+
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { data, error } = await supabase
     .from("shared_pages")
     .update({
@@ -155,6 +179,8 @@ export async function revokePageShare({
   userId,
   shareId,
 }: ShareMutationParams): Promise<void> {
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase
     .from("shared_pages")
     .update({
@@ -170,13 +196,15 @@ export async function revokePageShare({
 export async function regeneratePageShare({
   userId,
   page,
+  isProUser,
   oldShareId,
   baseUrl,
 }: ShareParams & {
   oldShareId: string;
 }): Promise<{ share: SharedPageRecord; shareUrl: string }> {
+  await requirePageSharingPro(userId, isProUser);
   await revokePageShare({ userId, shareId: oldShareId });
-  return createPageShare({ userId, page, baseUrl });
+  return createPageShare({ userId, page, isProUser, baseUrl });
 }
 
 export async function fetchPublicSharedPage(

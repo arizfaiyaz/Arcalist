@@ -1,7 +1,8 @@
 import { addMapping, getBookmarkMap } from "./chromeBookmarkMap";
-import { FREE_PLAN } from "../config/plans";
+import { FREE_LIMITS } from "./planLimits";
 import { createBookmarkFromNode } from "./importBookmarks";
-import { getPlanStatus, markDirty } from "./sync/syncStorage";
+import { resolveAuthenticatedPlanStatus } from "./plan";
+import { markDirty } from "./sync/syncStorage";
 import {
   getStoredAuthState,
   getWorkspaceStorageKey,
@@ -63,7 +64,7 @@ export async function autoSyncChromeBookmarks(
 
     const boardUrlMap = buildBoardUrlMap(state);
     const map = await getBookmarkMap();
-    const plan = await getPlanStatus();
+    const plan = await resolveAuthenticatedPlanStatus(userId);
     const lastSyncKey = `${LAST_SYNC_KEY}:${userId}`;
     const lastSyncResult = await chrome.storage.local.get(lastSyncKey);
     const lastSyncTime = (lastSyncResult[lastSyncKey] as number) ?? 0;
@@ -110,7 +111,7 @@ export async function autoSyncChromeBookmarks(
       if (!board) {
         if (
           !plan.isProUser &&
-          targetPage.boards.length >= FREE_PLAN.maxBoardsPerPage
+          targetPage.boards.length >= FREE_LIMITS.boardsPerPage
         ) {
           return null;
         }

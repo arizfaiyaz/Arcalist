@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getEffectiveTheme } from "../../src/config/themes";
 import {
   customWallpaperToTheme,
+  uploadCustomWallpaper,
   validateWallpaperFile,
 } from "../../src/lib/customWallpapers";
 import type { CustomWallpaper } from "../../src/types";
@@ -46,5 +47,23 @@ describe("custom wallpapers", () => {
       "custom:cw_test",
     );
   });
-});
 
+  it("rejects direct custom wallpaper uploads for free users", async () => {
+    const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "wall.png", {
+      type: "image/png",
+    });
+
+    await expect(
+      uploadCustomWallpaper({
+        file: png,
+        userId: "user-1",
+        isProUser: false,
+        mode: "dark",
+        accentColor: "#22d3ee",
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      error: "Custom wallpapers are available with Arcalist Pro.",
+    });
+  });
+});

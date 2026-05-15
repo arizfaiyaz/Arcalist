@@ -22,9 +22,10 @@ import { applyTheme } from "../lib/theme";
 import { getEffectiveTheme, getThemeById } from "../config/themes";
 import { customWallpaperToTheme } from "../lib/customWallpapers";
 import {
-  getUserPlanLimits,
+  getPlanLimits,
   getVisiblePagesForPlan,
   normalizeWorkspaceState,
+  type PlanName,
 } from "../lib/planLimits";
 import type {
   ArcalistState,
@@ -78,11 +79,19 @@ type ArcalistStore = ArcalistState & {
   signInError: string | null;
   hydrated: boolean;
   authReady: boolean;
+  isProUser: boolean;
+  planName: PlanName;
+  entitlementReady: boolean;
 
   // Initialization & auth
   initialize: () => Promise<void>;
   hydrateWorkspaceForUser: (user: User) => Promise<void>;
   setAuthenticatedUser: (user: User | null) => Promise<void>;
+  setVerifiedPlanStatus: (
+    isProUser: boolean,
+    planName: PlanName,
+    entitlementReady?: boolean,
+  ) => void;
   clearWorkspaceStore: () => void;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -388,6 +397,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     signInError: null,
     hydrated: false,
     authReady: false,
+    isProUser: false,
+    planName: "free",
+    entitlementReady: false,
 
     // ─── Initialization ───────────────────────────────────────
     initialize: async () => {
@@ -396,7 +408,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       } = await supabase.auth.getSession();
       if (!session?.user) {
         clearWorkspaceFromMemory();
-        set({ user: null, authReady: true });
+        set({
+          user: null,
+          authReady: true,
+          isProUser: false,
+          planName: "free",
+          entitlementReady: true,
+        });
         await setStoredAuthState(null);
         await setPlanStatus(false, "free");
         return;
@@ -406,11 +424,17 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     hydrateWorkspaceForUser: async (user) => {
-      set({ user, authReady: true, hydrated: false, signingIn: false });
+      set({
+        user,
+        authReady: true,
+        hydrated: false,
+        signingIn: false,
+        isProUser: false,
+        planName: "free",
+        entitlementReady: false,
+      });
       await setStoredAuthState(user.id);
-
-      const limits = getUserPlanLimits(user);
-      await setPlanStatus(limits.isProUser, limits.planName);
+      await setPlanStatus(false, "free");
 
       const local = await loadState(user.id);
       if (get().user?.id !== user.id) return;
@@ -425,7 +449,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         applyTheme(
           getEffectiveTheme(
             normalized.settings.selectedThemeId,
-            limits.isProUser,
+            false,
             normalized.settings.customWallpapers.map(customWallpaperToTheme),
           ),
         );
@@ -439,7 +463,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         applyTheme(
           getEffectiveTheme(
             initial.settings.selectedThemeId,
-            limits.isProUser,
+            false,
             initial.settings.customWallpapers.map(customWallpaperToTheme),
           ),
         );
@@ -465,7 +489,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
           applyTheme(
             getEffectiveTheme(
               normalized.settings.selectedThemeId,
-              limits.isProUser,
+              get().isProUser,
               normalized.settings.customWallpapers.map(customWallpaperToTheme),
             ),
           );
@@ -473,11 +497,11 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       };
 
       const runBackgroundTasks = async () => {
-        if (limits.isProUser) {
+        if (get().isProUser) {
           const meta = await getSyncMeta();
           if (meta.enabled) {
             const currentLocal = (await loadState(user.id)) ?? get();
-            const synced = await syncNow(user.id, currentLocal);
+            const synced = await syncNow(user.id, currentLocal, get().isProUser);
             if (get().user?.id !== user.id) return;
             if (synced) {
               const winner = currentLocal
@@ -511,7 +535,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
             applyTheme(
               getEffectiveTheme(
                 normalized.settings.selectedThemeId,
-                limits.isProUser,
+                get().isProUser,
                 normalized.settings.customWallpapers.map(customWallpaperToTheme),
               ),
             );
@@ -527,16 +551,35 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     setAuthenticatedUser: async (user) => {
       if (!user) {
         clearWorkspaceFromMemory();
-        set({ user: null, authReady: true, signingIn: false, signInError: null });
+        set({
+          user: null,
+          authReady: true,
+          signingIn: false,
+          signInError: null,
+          isProUser: false,
+          planName: "free",
+          entitlementReady: true,
+        });
         await setStoredAuthState(null);
         await setPlanStatus(false, "free");
         return;
       }
 
-      set({ user, authReady: true, signingIn: false, signInError: null });
+      set({
+        user,
+        authReady: true,
+        signingIn: false,
+        signInError: null,
+        isProUser: false,
+        planName: "free",
+        entitlementReady: false,
+      });
       await setStoredAuthState(user.id);
-      const limits = getUserPlanLimits(user);
-      await setPlanStatus(limits.isProUser, limits.planName);
+      await setPlanStatus(false, "free");
+    },
+
+    setVerifiedPlanStatus: (isProUser, planName, entitlementReady = true) => {
+      set({ isProUser, planName, entitlementReady });
     },
 
     clearWorkspaceStore: () => {
@@ -624,7 +667,15 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     signOut: async () => {
       const userId = get().user?.id ?? null;
       clearWorkspaceFromMemory();
-      set({ user: null, authReady: true, signingIn: false, signInError: null });
+      set({
+        user: null,
+        authReady: true,
+        signingIn: false,
+        signInError: null,
+        isProUser: false,
+        planName: "free",
+        entitlementReady: true,
+      });
       await setStoredAuthState(null);
       await setPlanStatus(false, "free");
       await clearWorkspaceCacheForUser(userId);
@@ -633,18 +684,18 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     // ─── Free Tier Helpers ─────────────────────────────────
     canCreatePage: () => {
-      const limits = getUserPlanLimits(get().user);
+      const limits = getPlanLimits(get().isProUser);
       return limits.canCreatePage(get().pages.length);
     },
 
     canCreateBoard: (pageId) => {
       const page = get().pages.find((p) => p.id === pageId);
-      const limits = getUserPlanLimits(get().user);
+      const limits = getPlanLimits(get().isProUser);
       return limits.canCreateBoard(page?.boards?.length ?? 0);
     },
 
     getVisiblePages: () => {
-      const limits = getUserPlanLimits(get().user);
+      const limits = getPlanLimits(get().isProUser);
       return getVisiblePagesForPlan(get().pages, limits);
     },
 
@@ -695,9 +746,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         wallpaperTheme,
         updatedAt,
       } = get();
-      const userId = user?.id ?? (IS_TEST_ENV ? "test-user" : null);
+      const userId = user?.id ?? null;
       if (!userId) return;
-      const limits = getUserPlanLimits(user);
+      const limits = getPlanLimits(get().isProUser);
       if (!IS_TEST_ENV) {
         const meta = await getSyncMeta();
         if (!limits.isProUser || !meta.enabled) {
@@ -715,16 +766,20 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
       set({ syncStatus: "syncing" });
       try {
-        await pushToCloud(userId, {
-          pages,
-          activePageId,
-          trash,
-          overflowBoards,
-          privacyMode,
-          settings,
-          wallpaperTheme,
-          updatedAt,
-        });
+        await pushToCloud(
+          userId,
+          {
+            pages,
+            activePageId,
+            trash,
+            overflowBoards,
+            privacyMode,
+            settings,
+            wallpaperTheme,
+            updatedAt,
+          },
+          limits.isProUser,
+        );
         set({ syncStatus: "synced" });
         // Reset back to idle after 2 seconds
         setTimeout(() => set({ syncStatus: "idle" }), 2000);
@@ -763,7 +818,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         getThemeById(wallpaper.id, customThemes)?.id ?? "default-dark";
       const theme = getEffectiveTheme(
         selectedThemeId,
-        getUserPlanLimits(get().user).isProUser,
+        get().isProUser,
         customThemes,
       );
       set((state) => ({
@@ -788,7 +843,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     addPage: (title) => {
-      const limits = getUserPlanLimits(get().user);
+      const limits = getPlanLimits(get().isProUser);
       if (!limits.canCreatePage(get().pages.length)) return false;
       const newPage: Page = {
         id: generateId(),
@@ -836,7 +891,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     // ─── Board Actions ────────────────────────────────────────
     addBoard: (pageId, title) => {
       const page = get().pages.find((p) => p.id === pageId);
-      const limits = getUserPlanLimits(get().user);
+      const limits = getPlanLimits(get().isProUser);
       if (!limits.canCreateBoard(page?.boards?.length ?? 0)) return false;
       const newBoard: Board = {
         id: generateId(),

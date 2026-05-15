@@ -9,6 +9,11 @@ create table if not exists public.productivity_analytics (
   primary key (user_id, date, domain)
 );
 
+-- Security TODO before payment launch:
+-- Productivity analytics is a Pro feature. Enforce Pro server-side for
+-- insert/update using trusted entitlement data such as auth.jwt() app_metadata
+-- or an Edge Function after the billing provider is integrated.
+
 alter table public.productivity_analytics enable row level security;
 
 drop policy if exists "Users can select their own analytics" on public.productivity_analytics;

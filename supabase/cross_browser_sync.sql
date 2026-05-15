@@ -7,6 +7,11 @@ create table if not exists public.arcalist_workspaces (
   updated_by_device_id text
 );
 
+-- Security TODO before payment launch:
+-- Cross-browser sync is a Pro feature. Enforce Pro server-side for workspace
+-- insert/update using trusted entitlement data such as auth.jwt() app_metadata
+-- or an Edge Function after the billing provider is integrated.
+
 alter table public.arcalist_workspaces
   add column if not exists version integer not null default 1,
   add column if not exists updated_by_device_id text;

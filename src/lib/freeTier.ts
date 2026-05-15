@@ -1,21 +1,23 @@
-import { FREE_PLAN } from "../config/plans";
-import { normalizeWorkspaceState } from "./planLimits";
+import {
+  FREE_LIMITS,
+  canCreateBoard as canCreateBoardForPlan,
+  canCreatePage as canCreatePageForPlan,
+  normalizeWorkspaceState,
+} from "./planLimits";
 import type { ArcalistState, Page } from "../types";
 
 export const FREE_TIER_LIMITS = {
-  maxPages: FREE_PLAN.maxPages,
-  maxBoardsPerPage: FREE_PLAN.maxBoardsPerPage,
-  maxVisibleBoards: FREE_PLAN.maxPages * FREE_PLAN.maxBoardsPerPage,
+  maxPages: FREE_LIMITS.pages,
+  maxBoardsPerPage: FREE_LIMITS.boardsPerPage,
+  maxVisibleBoards: FREE_LIMITS.pages * FREE_LIMITS.boardsPerPage,
 };
 
 export const canCreatePage = (pages: Page[], isProUser = false) => {
-  if (isProUser) return true;
-  return pages.length < FREE_PLAN.maxPages;
+  return canCreatePageForPlan(isProUser, pages.length);
 };
 
 export const canCreateBoard = (page: Page | undefined, isProUser = false) => {
-  if (isProUser) return true;
-  return (page?.boards?.length ?? 0) < FREE_PLAN.maxBoardsPerPage;
+  return canCreateBoardForPlan(isProUser, page?.boards?.length ?? 0);
 };
 
 // Kept as a compatibility export for older callers. Despite the legacy name,

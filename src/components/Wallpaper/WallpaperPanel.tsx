@@ -10,6 +10,7 @@ import {
   deleteCustomWallpaperFile,
   uploadCustomWallpaper,
 } from "../../lib/customWallpapers";
+import { canUploadCustomWallpaper } from "../../lib/planLimits";
 
 type Props = {
   open: boolean;
@@ -77,7 +78,7 @@ export function WallpaperPanel({
 
   const handleUploadClick = () => {
     setUploadError(null);
-    if (!isProUser) {
+    if (!canUploadCustomWallpaper(isProUser)) {
       setPrompt({
         title: "Custom wallpaper",
         description: "Custom wallpapers are available with Arcalist Pro.",
@@ -110,6 +111,7 @@ export function WallpaperPanel({
     const result = await uploadCustomWallpaper({
       file,
       userId: user.id,
+      isProUser,
       mode: styleTab,
       accentColor: effectiveTheme.accentColor || "#22d3ee",
     });

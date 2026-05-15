@@ -1,4 +1,5 @@
 import { supabase } from "../supabase";
+import { resolveAuthenticatedPlanStatus } from "../plan";
 import { getDeviceInfo, updateDeviceLastSeen } from "../device";
 import type { ArcalistState } from "../../types";
 import type { ArcalistDevice, CloudWorkspaceRow } from "../../types/sync";
@@ -39,6 +40,8 @@ function getRowWorkspace(row: CloudWorkspaceRow | null): ArcalistState | null {
 }
 
 async function registerDevice(userId: string, device: ArcalistDevice) {
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.from(DEVICE_TABLE).upsert(
     {
       user_id: userId,
@@ -61,6 +64,11 @@ async function getUserId(userId?: string) {
     data: { session },
   } = await supabase.auth.getSession();
   return session?.user?.id ?? null;
+}
+
+async function canUseCloudSync(userId: string, isProUser: boolean) {
+  if (!userId || !isProUser) return false;
+  return (await resolveAuthenticatedPlanStatus(userId)).isProUser;
 }
 
 export async function pullFromCloud(
@@ -112,7 +120,17 @@ async function pullCloudWorkspace(userId: string): Promise<CloudWorkspace | null
 export async function pushToCloud(
   userId: string,
   workspace: ArcalistState,
+  isProUser = false,
 ): Promise<void> {
+  if (!(await canUseCloudSync(userId, isProUser))) {
+    await updateSyncMeta({
+      enabled: false,
+      status: "idle",
+      error: undefined,
+    });
+    return;
+  }
+
   const device = await updateDeviceLastSeen();
   await registerDevice(userId, device);
 
@@ -120,6 +138,8 @@ export async function pushToCloud(
   const nextVersion = Math.max(meta.cloudVersion ?? 0, meta.localVersion ?? 0) + 1;
   const updatedAt = new Date().toISOString();
 
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.from(WORKSPACE_TABLE).upsert(
     {
       user_id: userId,
@@ -134,6 +154,8 @@ export async function pushToCloud(
   );
 
   if (error) {
+    // TODO: Frontend gating is not enough. This must also be protected by RLS,
+    // RPC, or Edge Function entitlement checks before production.
     const fallback = await supabase.from(WORKSPACE_TABLE).upsert(
       {
         user_id: userId,
@@ -167,7 +189,17 @@ export function resolveConflict(
 export async function syncNow(
   userIdArg?: string,
   currentWorkspace?: ArcalistState,
+  isProUser = false,
 ): Promise<ArcalistState | null> {
+  if (!isProUser) {
+    await updateSyncMeta({
+      enabled: false,
+      status: "idle",
+      error: undefined,
+    });
+    return currentWorkspace ?? (await loadLocalWorkspace());
+  }
+
   if (!navigator.onLine) {
     await updateSyncMeta({ status: "offline" });
     return currentWorkspace ?? (await loadLocalWorkspace());
@@ -175,6 +207,14 @@ export async function syncNow(
 
   const userId = await getUserId(userIdArg);
   if (!userId) return currentWorkspace ?? (await loadLocalWorkspace());
+  if (!(await canUseCloudSync(userId, isProUser))) {
+    await updateSyncMeta({
+      enabled: false,
+      status: "idle",
+      error: undefined,
+    });
+    return currentWorkspace ?? (await loadLocalWorkspace());
+  }
 
   const meta = await getSyncMeta();
   if (!meta.enabled) {
@@ -194,7 +234,7 @@ export async function syncNow(
 
     const cloud = await pullCloudWorkspace(userId);
     if (!cloud) {
-      await pushToCloud(userId, localWorkspace);
+      await pushToCloud(userId, localWorkspace, true);
       return localWorkspace;
     }
 
@@ -207,7 +247,7 @@ export async function syncNow(
     if (willOverwriteLocal(localWorkspace, resolved)) {
       await createWorkspaceBackup(localWorkspace);
       await saveLocalWorkspace(resolved);
-      await pushToCloud(userId, resolved);
+      await pushToCloud(userId, resolved, true);
       await updateSyncMeta({
         dirty: false,
         lastPulledAt: new Date().toISOString(),
@@ -219,7 +259,7 @@ export async function syncNow(
     }
 
     if (meta.dirty || workspaceTimestamp(localWorkspace) >= workspaceTimestamp(cloud.workspace)) {
-      await pushToCloud(userId, localWorkspace);
+      await pushToCloud(userId, localWorkspace, true);
       return localWorkspace;
     }
 

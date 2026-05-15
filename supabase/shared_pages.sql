@@ -12,6 +12,11 @@ create table if not exists public.shared_pages (
   last_viewed_at timestamptz
 );
 
+-- Security TODO before payment launch:
+-- Page sharing is a Pro feature. Enforce Pro server-side for insert/update
+-- using trusted entitlement data such as auth.jwt() app_metadata or an Edge
+-- Function after the billing provider is integrated.
+
 alter table public.shared_pages enable row level security;
 
 drop policy if exists "Owners can select their shared pages" on public.shared_pages;

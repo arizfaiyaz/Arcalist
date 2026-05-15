@@ -3,6 +3,7 @@ import { OnboardingScreen } from "../Onboarding/OnboardingScreen";
 import { NewTabPage } from "../../newtab/NewTabPage";
 import { useAuth } from "../../hooks/useAuth";
 import { useArcalistStore } from "../../store/useArcalistStore";
+import { EntitlementProvider } from "../../providers/EntitlementProvider";
 
 function LoadingScreen() {
   return (
@@ -89,5 +90,9 @@ export function AuthGate() {
     return <LoadingScreen />;
   }
 
-  return <NewTabPage />;
+  return (
+    <EntitlementProvider>
+      <NewTabPage />
+    </EntitlementProvider>
+  );
 }

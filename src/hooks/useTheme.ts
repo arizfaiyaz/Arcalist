@@ -13,6 +13,7 @@ import {
 } from "../lib/customWallpapers";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { usePlanLimits } from "./usePlanLimits";
+import { canUsePremiumThemes } from "../lib/planLimits";
 
 export type SetThemeResult =
   | { ok: true; theme: ArcalistTheme }
@@ -64,7 +65,8 @@ export function useTheme() {
   }, [customWallpapers, updateSettings, user]);
 
   const isThemeLocked = useCallback(
-    (theme: ArcalistTheme) => theme.tier === "pro" && !planLimits.isProUser,
+    (theme: ArcalistTheme) =>
+      theme.tier === "pro" && !canUsePremiumThemes(planLimits.isProUser),
     [planLimits.isProUser],
   );
 

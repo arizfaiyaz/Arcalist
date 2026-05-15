@@ -1,7 +1,50 @@
-import type { User } from "@supabase/supabase-js";
-import { DEV_IS_PRO, FREE_PLAN, PRO_PLAN, type PlanName } from "../config/plans";
 import { generateId } from "./id";
 import type { ArcalistState, Board, Page } from "../types";
+
+export type PlanName = "free" | "pro";
+
+export const FREE_LIMITS = {
+  pages: 3,
+  boardsPerPage: 10,
+};
+
+export function canCreatePage(isPro: boolean, currentPageCount: number) {
+  if (isPro) return true;
+  return currentPageCount < FREE_LIMITS.pages;
+}
+
+export function canCreateBoard(isPro: boolean, currentBoardCount: number) {
+  if (isPro) return true;
+  return currentBoardCount < FREE_LIMITS.boardsPerPage;
+}
+
+export function canUseCloudSync(isPro: boolean) {
+  return isPro;
+}
+
+export function canUseSmartCollections(isPro: boolean) {
+  return isPro;
+}
+
+export function canUseProductivityAnalytics(isPro: boolean) {
+  return isPro;
+}
+
+export function canUsePremiumThemes(isPro: boolean) {
+  return isPro;
+}
+
+export function canUploadCustomWallpaper(isPro: boolean) {
+  return isPro;
+}
+
+export function canUseCrossBrowserSync(isPro: boolean) {
+  return isPro;
+}
+
+export function canShareWorkspace(isPro: boolean) {
+  return isPro;
+}
 
 export type UserPlanLimits = {
   isProUser: boolean;
@@ -29,33 +72,17 @@ export type PlanVisibilityResult = {
   hasHiddenData: boolean;
 };
 
-const getMetadataPlan = (user: User | null | undefined): PlanName | null => {
-  const metadataPlan =
-    user?.user_metadata?.plan ??
-    user?.app_metadata?.plan ??
-    user?.user_metadata?.subscription_plan ??
-    user?.app_metadata?.subscription_plan;
-
-  return metadataPlan === "pro" ? "pro" : metadataPlan === "free" ? "free" : null;
-};
-
-export const getUserPlanName = (user?: User | null): PlanName => {
-  if (DEV_IS_PRO) return "pro";
-  return getMetadataPlan(user) ?? "free";
-};
-
-export const getUserPlanLimits = (user?: User | null): UserPlanLimits => {
-  const planName = getUserPlanName(user);
-  const plan = planName === "pro" ? PRO_PLAN : FREE_PLAN;
-
+export const getPlanLimits = (isPro: boolean): UserPlanLimits => {
+  const planName: PlanName = isPro ? "pro" : "free";
   return {
-    isProUser: planName === "pro",
+    isProUser: isPro,
     planName,
-    maxPages: plan.maxPages,
-    maxBoardsPerPage: plan.maxBoardsPerPage,
-    canCreatePage: (currentPageCount) => currentPageCount < plan.maxPages,
+    maxPages: isPro ? Infinity : FREE_LIMITS.pages,
+    maxBoardsPerPage: isPro ? Infinity : FREE_LIMITS.boardsPerPage,
+    canCreatePage: (currentPageCount) =>
+      canCreatePage(isPro, currentPageCount),
     canCreateBoard: (currentBoardCountForPage) =>
-      currentBoardCountForPage < plan.maxBoardsPerPage,
+      canCreateBoard(isPro, currentBoardCountForPage),
   };
 };
 

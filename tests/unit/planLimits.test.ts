@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
-import type { User } from "@supabase/supabase-js";
 import {
+  canCreateBoard,
+  canCreatePage,
+  getPlanLimits,
   getLockedBoardCountForPlan,
   getLockedPageCountForPlan,
-  getUserPlanLimits,
   getVisibleWorkspaceForPlan,
   getVisiblePagesForPlan,
   normalizeWorkspaceState,
@@ -32,7 +33,7 @@ describe("plan limits", () => {
     const state = createBaseState({
       pages: Array.from({ length: 5 }, (_, index) => createPage(index, 12)),
     });
-    const limits = getUserPlanLimits(null);
+    const limits = getPlanLimits(false);
     const workspace = getVisibleWorkspaceForPlan({
       pages: state.pages,
       limits,
@@ -54,7 +55,7 @@ describe("plan limits", () => {
     });
     const originalPageId = state.pages[0].id;
     const originalBoardPageCounts = state.pages.map((page) => page.boards.length);
-    const limits = getUserPlanLimits(null);
+    const limits = getPlanLimits(false);
     const workspace = getVisibleWorkspaceForPlan({
       pages: state.pages,
       limits,
@@ -79,7 +80,7 @@ describe("plan limits", () => {
     const state = createBaseState({
       pages: [createPage(0, 35)],
     });
-    const limits = getUserPlanLimits(null);
+    const limits = getPlanLimits(false);
     const workspace = getVisibleWorkspaceForPlan({
       pages: state.pages,
       limits,
@@ -95,14 +96,10 @@ describe("plan limits", () => {
   });
 
   it("allows pro users to see and create beyond free limits", () => {
-    const proUser = {
-      user_metadata: { plan: "pro" },
-      app_metadata: {},
-    } as User;
     const state = createBaseState({
       pages: Array.from({ length: 5 }, (_, index) => createPage(index, 12)),
     });
-    const limits = getUserPlanLimits(proUser);
+    const limits = getPlanLimits(true);
     const visiblePages = getVisiblePagesForPlan(state.pages, limits);
 
     expect(limits.isProUser).toBe(true);
@@ -110,6 +107,15 @@ describe("plan limits", () => {
     expect(limits.canCreateBoard(40)).toBe(true);
     expect(visiblePages).toHaveLength(5);
     expect(visiblePages[0].boards).toHaveLength(12);
+  });
+
+  it("enforces free creation limits and allows pro beyond them", () => {
+    expect(canCreatePage(false, 2)).toBe(true);
+    expect(canCreatePage(false, 3)).toBe(false);
+    expect(canCreateBoard(false, 9)).toBe(true);
+    expect(canCreateBoard(false, 10)).toBe(false);
+    expect(canCreatePage(true, 25)).toBe(true);
+    expect(canCreateBoard(true, 40)).toBe(true);
   });
 
   it("normalizes loaded state without deleting over-limit pages or boards", () => {

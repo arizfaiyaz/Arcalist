@@ -103,11 +103,14 @@ export async function getPlanStatus(): Promise<SyncPlanStatus> {
     PLAN_STORAGE_KEY,
   );
   const stored = result[PLAN_STORAGE_KEY];
+
+  // This is a user-editable cache for background convenience only. It is not an
+  // entitlement source; callers that write server resources must resolve plan
+  // status from authenticated Supabase user_entitlements. It never promotes a
+  // user to Pro.
   return {
     ...defaultPlanStatus(),
-    ...stored,
-    isProUser: stored?.isProUser === true,
-    planName: stored?.planName === "pro" ? "pro" : "free",
+    updatedAt: stored?.updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -115,6 +118,7 @@ export async function setPlanStatus(
   isProUser: boolean,
   planName: SyncPlanStatus["planName"],
 ): Promise<void> {
+  // Cache only. Do not use this value as proof of Pro entitlement.
   await browserApi.storage.set({
     [PLAN_STORAGE_KEY]: {
       isProUser,

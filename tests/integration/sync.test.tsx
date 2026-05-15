@@ -11,6 +11,9 @@ describe("Supabase sync", () => {
       useArcalistStore.setState({
         ...base,
         user: { id: "test-user" } as User,
+        isProUser: true,
+        planName: "pro",
+        entitlementReady: true,
       }),
     );
 

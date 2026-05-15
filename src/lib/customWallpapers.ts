@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { resolveAuthenticatedPlanStatus } from "./plan";
 import type { ArcalistTheme, ThemeMode } from "../config/themes";
 import type { CustomWallpaper } from "../types";
 
@@ -104,14 +105,33 @@ const generateWallpaperId = () =>
 export async function uploadCustomWallpaper({
   file,
   userId,
+  isProUser,
   mode,
   accentColor,
 }: {
   file: File;
-  userId: string;
+  userId?: string | null;
+  isProUser: boolean;
   mode: ThemeMode;
   accentColor: string;
 }): Promise<WallpaperUploadResult> {
+  if (!userId) {
+    return { ok: false, error: "Please sign in to upload custom wallpapers." };
+  }
+  if (!isProUser) {
+    return {
+      ok: false,
+      error: "Custom wallpapers are available with Arcalist Pro.",
+    };
+  }
+  const resolvedPlan = await resolveAuthenticatedPlanStatus(userId);
+  if (!resolvedPlan.isProUser) {
+    return {
+      ok: false,
+      error: "Custom wallpapers are available with Arcalist Pro.",
+    };
+  }
+
   const validationError = validateWallpaperFile(file);
   if (validationError) return { ok: false, error: validationError };
 
@@ -124,6 +144,8 @@ export async function uploadCustomWallpaper({
     const wallpaperId = generateWallpaperId();
     const storagePath = `${userId}/${wallpaperId}.webp`;
 
+    // TODO: Frontend gating is not enough. This must also be protected by RLS,
+    // RPC, or Edge Function entitlement checks before production.
     const { error } = await supabase.storage
       .from(CUSTOM_WALLPAPER_BUCKET)
       .upload(storagePath, compressed, {
@@ -187,6 +209,8 @@ export async function uploadCustomWallpaper({
 }
 
 export async function deleteCustomWallpaperFile(storagePath: string) {
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.storage
     .from(CUSTOM_WALLPAPER_BUCKET)
     .remove([storagePath]);

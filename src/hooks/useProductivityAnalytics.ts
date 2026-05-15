@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { PlanName } from "../config/plans";
+import type { PlanName } from "../lib/planLimits";
 import { useArcalistStore } from "../store/useArcalistStore";
+import { usePlanLimits } from "./usePlanLimits";
 import {
   aggregateStatsForDates,
   ANALYTICS_PLAN_STORAGE_KEY,
@@ -70,6 +71,8 @@ export async function setAnalyticsPlanStatus(
   isProUser: boolean,
   planName: PlanName,
 ) {
+  // Cache only. Background code must re-check auth and resolve entitlement from
+  // Supabase user_entitlements before treating this as Pro.
   const plan: AnalyticsPlanStatus = {
     isProUser,
     planName,
@@ -87,6 +90,7 @@ export async function setAnalyticsPlanStatus(
 
 export function useProductivityAnalytics(range: AnalyticsRange = "today") {
   const user = useArcalistStore((state) => state.user);
+  const planLimits = usePlanLimits();
   const [stats, setStats] = useState<ProductivityAnalyticsState>(() =>
     createDefaultAnalyticsState(),
   );
@@ -100,9 +104,13 @@ export function useProductivityAnalytics(range: AnalyticsRange = "today") {
     const next = response?.stats ?? (await readAnalyticsFromStorage());
     setStats(next);
     setLoading(false);
-    void syncProductivityAnalyticsToCloud(user?.id, next);
+    void syncProductivityAnalyticsToCloud(
+      user?.id,
+      next,
+      planLimits.isProUser,
+    );
     return next;
-  }, [user?.id]);
+  }, [planLimits.isProUser, user?.id]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {

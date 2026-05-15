@@ -18,6 +18,11 @@ set
   file_size_limit = 2097152,
   allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
 
+-- Security TODO before payment launch:
+-- Custom wallpapers are a Pro feature. Enforce Pro server-side for upload/update
+-- using trusted entitlement data such as auth.jwt() app_metadata or an Edge
+-- Function after the billing provider is integrated.
+
 drop policy if exists "Users can read their own custom wallpapers" on storage.objects;
 create policy "Users can read their own custom wallpapers"
 on storage.objects for select

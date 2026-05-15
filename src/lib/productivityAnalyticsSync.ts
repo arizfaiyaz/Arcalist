@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { resolveAuthenticatedPlanStatus } from "./plan";
 import type {
   DomainTimeStat,
   ProductivityAnalyticsState,
@@ -17,8 +18,11 @@ type AnalyticsRow = {
 export async function syncProductivityAnalyticsToCloud(
   userId: string | undefined,
   analytics: ProductivityAnalyticsState,
+  isProUser = false,
 ) {
   if (!userId) return;
+  if (!isProUser) return;
+  if (!(await resolveAuthenticatedPlanStatus(userId)).isProUser) return;
 
   const rows: AnalyticsRow[] = [];
   for (const [date, statsByDomain] of Object.entries(analytics.domainStats)) {
@@ -29,6 +33,8 @@ export async function syncProductivityAnalyticsToCloud(
 
   if (rows.length === 0) return;
 
+  // TODO: Frontend gating is not enough. This must also be protected by RLS,
+  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.from("productivity_analytics").upsert(rows, {
     onConflict: "user_id,date,domain",
   });

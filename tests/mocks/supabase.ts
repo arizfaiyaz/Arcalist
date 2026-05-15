@@ -3,6 +3,7 @@ import { vi } from "vitest";
 export function createSupabaseMock() {
   return {
     auth: {
+      getUser: vi.fn(async () => ({ data: { user: null }, error: null })),
       getSession: vi.fn(async () => ({ data: { session: null } })),
       setSession: vi.fn(async () => ({ data: { user: null }, error: null })),
       onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: () => {} } } })),
@@ -12,6 +13,7 @@ export function createSupabaseMock() {
       upsert: vi.fn(async () => ({ error: null })),
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
+          maybeSingle: vi.fn(async () => ({ data: null, error: null })),
           single: vi.fn(async () => ({ data: null, error: null })),
         })),
       })),

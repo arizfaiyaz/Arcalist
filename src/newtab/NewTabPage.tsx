@@ -17,7 +17,11 @@ import { SharePageModal } from "../components/sharing/SharePageModal";
 import { usePlanLimits } from "../hooks/usePlanLimits";
 import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
+import { useEntitlementContext } from "../providers/EntitlementProvider";
 import {
+  canShareWorkspace,
+  canUseProductivityAnalytics,
+  canUseSmartCollections,
   getVisibleWorkspaceForPlan,
   type PlanVisibleBoard,
 } from "../lib/planLimits";
@@ -34,6 +38,7 @@ export function NewTabPage() {
   const trashBookmark = useArcalistStore((state) => state.trashBookmark);
   const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
   const planLimits = usePlanLimits();
+  const { loading: entitlementLoading } = useEntitlementContext();
   const { effectiveTheme } = useTheme();
   const visibleWorkspace = useMemo(
     () => getVisibleWorkspaceForPlan({ pages, limits: planLimits }),
@@ -162,7 +167,10 @@ export function NewTabPage() {
   };
 
   const handleSmartCollectionsOpen = () => {
-    if (!planLimits.isProUser) {
+    if (
+      entitlementLoading ||
+      !canUseSmartCollections(planLimits.isProUser)
+    ) {
       setUpgradePrompt({
         title: "Smart Collections are available with Arcalist Pro.",
         description:
@@ -175,7 +183,10 @@ export function NewTabPage() {
   };
 
   const handleAnalyticsOpen = () => {
-    if (!planLimits.isProUser) {
+    if (
+      entitlementLoading ||
+      !canUseProductivityAnalytics(planLimits.isProUser)
+    ) {
       setUpgradePrompt({
         title: "Productivity analytics are available with Arcalist Pro.",
         description:
@@ -188,7 +199,7 @@ export function NewTabPage() {
   };
 
   const handleSharePage = (page: Page) => {
-    if (!planLimits.isProUser) {
+    if (entitlementLoading || !canShareWorkspace(planLimits.isProUser)) {
       setUpgradePrompt({
         title: "Page sharing is available with Arcalist Pro.",
         description:
@@ -277,7 +288,7 @@ export function NewTabPage() {
             onDeletePage={deletePage}
             onRenamePage={renamePage}
             onSharePage={handleSharePage}
-            shareLocked={!planLimits.isProUser}
+            shareLocked={entitlementLoading || !planLimits.isProUser}
             lockedPageCount={lockedPageCount}
             onPageLimitReached={showPageUpgradePrompt}
           />
@@ -310,8 +321,8 @@ export function NewTabPage() {
             setSelectedBookmarks([]);
           }}
           multiSelectMode={multiSelectMode}
-          smartCollectionsLocked={!planLimits.isProUser}
-          analyticsLocked={!planLimits.isProUser}
+          smartCollectionsLocked={entitlementLoading || !planLimits.isProUser}
+          analyticsLocked={entitlementLoading || !planLimits.isProUser}
         />
       </aside>
 
@@ -328,17 +339,18 @@ export function NewTabPage() {
       <ImportDialog open={importOpen} onClose={() => setImportOpen(false)} />
       <TrashPanel open={trashOpen} onClose={() => setTrashOpen(false)} />
       <SmartCollectionsPanel
-        open={smartCollectionsOpen && planLimits.isProUser}
+        open={smartCollectionsOpen && !entitlementLoading && planLimits.isProUser}
         onClose={() => setSmartCollectionsOpen(false)}
       />
       <ProductivityAnalyticsPanel
-        open={analyticsOpen && planLimits.isProUser}
+        open={analyticsOpen && !entitlementLoading && planLimits.isProUser}
         onClose={() => setAnalyticsOpen(false)}
       />
       <SharePageModal
         open={Boolean(sharePage)}
         page={sharePage}
         userId={user?.id ?? null}
+        isProUser={planLimits.isProUser}
         onClose={() => setSharePage(null)}
       />
       <SettingsPanel
