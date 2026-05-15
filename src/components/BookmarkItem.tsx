@@ -3,6 +3,7 @@ import { GripVertical, Trash2, ExternalLink, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../lib/utils";
+import { isDndBlockedElement } from "../lib/dnd";
 import { normalizeSafeUrl, openSafeUrl } from "../lib/urlSafety";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { BookmarkEditModal } from "./BookmarkEditModal";
@@ -37,10 +38,27 @@ export function BookmarkItem({
     y: number;
   } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const pointerMovedRef = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const revealActionClass = cn(
+    "opacity-0 pointer-events-none -translate-x-1",
+    "transition-all duration-150",
+    "group-hover/bookmark:opacity-100 group-hover/bookmark:pointer-events-auto group-hover/bookmark:translate-x-0",
+    "group-focus-within/bookmark:opacity-100 group-focus-within/bookmark:pointer-events-auto group-focus-within/bookmark:translate-x-0",
+  );
   const rowActionClass = cn(
     "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+    revealActionClass,
+    "text-[var(--arc-text-secondary)]",
+  );
+  const inlineActionClass = cn(
+    "flex h-7 w-7 items-center justify-center rounded-md",
+    "text-[var(--arc-text-secondary)]",
+  );
+  const rightActionsClass = cn(
+    "absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1",
     "opacity-0 pointer-events-none -translate-x-1",
     "transition-all duration-150",
     "group-hover/bookmark:opacity-100 group-hover/bookmark:pointer-events-auto group-hover/bookmark:translate-x-0",
@@ -65,6 +83,15 @@ export function BookmarkItem({
     transition,
     opacity: isDragging ? 0 : 1,
   };
+  const safeListeners = listeners
+    ? {
+        ...listeners,
+        onPointerDown: (event: React.PointerEvent) => {
+          if (isDndBlockedElement(event.target, event.currentTarget)) return;
+          listeners.onPointerDown?.(event);
+        },
+      }
+    : undefined;
 
   // Close context menu when clicking outside
   useEffect(() => {
@@ -102,17 +129,56 @@ export function BookmarkItem({
     setContextMenu(null);
   };
 
+  const handleOpenBookmark = (event: React.MouseEvent) => {
+    if (pointerMovedRef.current) {
+      pointerMovedRef.current = false;
+      return;
+    }
+    if (isDndBlockedElement(event.target, event.currentTarget)) return;
+    if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
+      recordBookmarkVisit(boardId, bookmark.id);
+    }
+  };
+
+  const handlePointerDownCapture = (event: React.PointerEvent) => {
+    pointerMovedRef.current = false;
+    pointerStartRef.current = isDndBlockedElement(
+      event.target,
+      event.currentTarget,
+    )
+      ? null
+      : { x: event.clientX, y: event.clientY };
+  };
+
+  const handlePointerMoveCapture = (event: React.PointerEvent) => {
+    const start = pointerStartRef.current;
+    if (!start) return;
+
+    if (
+      Math.abs(event.clientX - start.x) > 5 ||
+      Math.abs(event.clientY - start.y) > 5
+    ) {
+      pointerMovedRef.current = true;
+    }
+  };
+
   return (
     <>
       <div
         ref={setNodeRef}
         style={style}
+        {...attributes}
+        {...safeListeners}
+        onClick={handleOpenBookmark}
+        onPointerDownCapture={handlePointerDownCapture}
+        onPointerMoveCapture={handlePointerMoveCapture}
         onContextMenu={handleContextMenu}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "group/bookmark flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg",
+          "group/bookmark relative flex items-center gap-2.5 rounded-lg py-1.5 pl-2.5 pr-16",
           "hover:bg-[var(--arc-button-bg)] transition-colors duration-150",
+          "cursor-grab active:cursor-grabbing",
           isSelected && "border border-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]",
         )}
       >
@@ -142,30 +208,21 @@ export function BookmarkItem({
             )}
           </button>
         ) : (
-          <button
-            {...attributes}
-            {...listeners}
-            type="button"
-            aria-label={`Reorder ${bookmark.title}`}
+          <span
+            aria-hidden="true"
             className={cn(
               rowActionClass,
-              "hover:bg-[var(--arc-button-hover-bg)] cursor-grab active:cursor-grabbing touch-none",
+              "touch-none",
             )}
           >
             <GripVertical size={12} />
-          </button>
+          </span>
         )}
 
         {/* Clickable link */}
         <div className="flex-1 min-w-0">
-          <button
-            type="button"
-            onClick={() => {
-              if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
-                recordBookmarkVisit(boardId, bookmark.id);
-              }
-            }}
-            className="flex items-center gap-2 w-full text-left"
+          <div
+            className="flex min-w-0 w-full items-center gap-2 text-left"
           >
             {/* Favicon — blurred in privacy mode */}
             <div
@@ -193,7 +250,7 @@ export function BookmarkItem({
             {/* Title — blurred in privacy mode */}
             <span
               className={cn(
-                "text-sm leading-none",
+                "block min-w-0 flex-1 text-sm leading-snug",
                 shortenTitles ? "truncate" : "whitespace-normal break-words",
                 "transition-all duration-200 select-none",
                 "text-[var(--arc-text-primary)] opacity-85 group-hover/bookmark:opacity-100",
@@ -202,7 +259,7 @@ export function BookmarkItem({
             >
               {bookmark.title}
             </span>
-          </button>
+          </div>
 
           {showDescriptions && bookmark.description && (
             <p className="text-[11px] text-[var(--arc-text-secondary)] pl-6 pr-2 mt-0.5">
@@ -211,30 +268,33 @@ export function BookmarkItem({
           )}
         </div>
 
-        {/* Trash button */}
-        <button
-          type="button"
-          onClick={() => setEditOpen(true)}
-          aria-label={`Edit ${bookmark.title}`}
-          className={cn(
-            rowActionClass,
-            "hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)]",
-          )}
-          title="Edit bookmark"
-        >
-          <Pencil size={10} />
-        </button>
-        <button
-          type="button"
-          onClick={handleTrash}
-          aria-label={`Move ${bookmark.title} to trash`}
-          className={cn(
-            rowActionClass,
-            "hover:bg-red-400/10 hover:text-red-400",
-          )}
-        >
-          <Trash2 size={10} />
-        </button>
+        <div className={rightActionsClass}>
+          <button
+            data-no-dnd="true"
+            type="button"
+            onClick={() => setEditOpen(true)}
+            aria-label={`Edit ${bookmark.title}`}
+            className={cn(
+              inlineActionClass,
+              "hover:bg-[var(--arc-button-hover-bg)] hover:text-[var(--arc-accent)]",
+            )}
+            title="Edit bookmark"
+          >
+            <Pencil size={10} />
+          </button>
+          <button
+            data-no-dnd="true"
+            type="button"
+            onClick={handleTrash}
+            aria-label={`Move ${bookmark.title} to trash`}
+            className={cn(
+              inlineActionClass,
+              "hover:bg-red-400/10 hover:text-red-400",
+            )}
+          >
+            <Trash2 size={10} />
+          </button>
+        </div>
       </div>
 
       {/* Context Menu */}

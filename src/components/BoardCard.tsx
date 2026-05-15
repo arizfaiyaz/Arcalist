@@ -8,6 +8,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
 import { cn } from "../lib/utils";
+import { isDndBlockedElement } from "../lib/dnd";
 import { BookmarkItem } from "./BookmarkItem";
 import type { Board } from "../types";
 import { useArcalistStore } from "../store/useArcalistStore";
@@ -67,6 +68,15 @@ export function BoardCard({
     transition,
     opacity: isDragging ? 0 : 1,
   };
+  const safeListeners = listeners
+    ? {
+        ...listeners,
+        onPointerDown: (event: React.PointerEvent) => {
+          if (isDndBlockedElement(event.target, event.currentTarget)) return;
+          listeners.onPointerDown?.(event);
+        },
+      }
+    : undefined;
 
   const threshold = Math.max(1, visibilityThreshold || 10);
   const shouldTruncate = smartTruncation && board.bookmarks.length > threshold;
@@ -109,22 +119,23 @@ export function BoardCard({
       )}
     >
       {/* Board Header */}
-      <div className="flex items-center justify-between px-1 mb-1 group">
-        {/* Drag handle for the board */}
+      <div
+        {...attributes}
+        {...safeListeners}
+        className="group flex cursor-grab items-center justify-between px-1 mb-1 active:cursor-grabbing"
+      >
+        {/* Visual drag hint for the board */}
         <div className="flex items-center gap-1.5">
-          <button
-            {...attributes}
-            {...listeners}
-            type="button"
-            aria-label={`Reorder ${board.title}`}
+          <span
+            aria-hidden="true"
             className={cn(
               "flex h-8 w-8 items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-opacity",
               "text-[var(--arc-text-secondary)] opacity-60 hover:opacity-100",
-              "cursor-grab active:cursor-grabbing touch-none hover:bg-[var(--arc-button-hover-bg)]",
+              "touch-none",
             )}
           >
             <GripVertical size={12} />
-          </button>
+          </span>
           <h3
             className={cn(
               "text-xs font-semibold text-[var(--arc-text-secondary)] uppercase tracking-wider",
@@ -138,6 +149,7 @@ export function BoardCard({
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
+            data-no-dnd="true"
             type="button"
             onClick={() => setAdding(true)}
             aria-label={`Add bookmark to ${board.title}`}
@@ -146,6 +158,7 @@ export function BoardCard({
             <Plus size={12} />
           </button>
           <button
+            data-no-dnd="true"
             type="button"
             onClick={() => deleteBoard(pageId, board.id)}
             aria-label={`Delete ${board.title}`}
@@ -179,6 +192,7 @@ export function BoardCard({
 
       {shouldTruncate && (
         <button
+          data-no-dnd="true"
           type="button"
           onClick={() => setShowAll((v) => !v)}
           className={cn(
@@ -195,6 +209,7 @@ export function BoardCard({
       {/* Add bookmark input */}
       {adding && (
         <input
+          data-no-dnd="true"
           autoFocus
           value={newUrl}
           onChange={(e) => setNewUrl(e.target.value)}
