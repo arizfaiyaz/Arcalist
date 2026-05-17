@@ -56,6 +56,8 @@ export function applyTheme(theme: ArcalistTheme) {
   root.classList.toggle("dark", theme.mode === "dark");
   root.classList.toggle("light", theme.mode === "light");
   root.classList.toggle("has-wallpaper", wallpaper.length > 0);
+  root.dataset.arcMode = theme.mode;
+  root.dataset.themeReady = "true";
 
   root.style.setProperty("--arc-wallpaper", wallpaper ? `url(${wallpaper})` : "none");
   root.style.setProperty("--arc-accent", theme.accentColor);
@@ -112,6 +114,8 @@ export function applyTheme(theme: ArcalistTheme) {
     document.body.style.backgroundSize = "cover";
     document.body.style.backgroundPosition = "center";
     document.body.style.backgroundAttachment = "fixed";
+    const image = new Image();
+    image.src = wallpaper;
   } else {
     document.body.style.backgroundImage = "";
     document.body.style.backgroundSize = "";

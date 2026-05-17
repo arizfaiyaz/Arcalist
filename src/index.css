@@ -28,9 +28,11 @@
 
 @layer base {
     :root {
+        color-scheme: dark;
         --workspace-max: 2100px;
         --workspace-gutter: clamp(12px, 2.5vw, 36px);
         --workspace-gutter-tight: clamp(10px, 2vw, 24px);
+        --arc-bg-fallback: #0f172a;
         --arc-wallpaper: none;
         --arc-accent: var(--color-accent);
         --arc-accent-foreground: #0f172a;
@@ -64,14 +66,31 @@
     }
 
     body {
-        background-color: var(--color-background);
+        background-color: var(--arc-bg-fallback);
         background-image: var(--arc-wallpaper, none);
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-        color: var(--text-primary);
+        color: var(--arc-text-primary);
         font-family: var(--font-sans);
         min-height: 100vh;
+    }
+
+    html,
+    body {
+        min-height: 100%;
+        background-color: var(--arc-bg-fallback);
+        color: var(--arc-text-primary);
+    }
+
+    #root {
+        min-height: 100%;
+        color: var(--arc-text-primary);
+    }
+
+    html[data-arc-mode="light"] {
+        color-scheme: light;
+        --arc-bg-fallback: #f5f6f9;
     }
 
     ::-webkit-scrollbar {

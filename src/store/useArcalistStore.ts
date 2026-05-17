@@ -25,6 +25,7 @@ import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
 import { DEFAULT_WALLPAPER, toWallpaperTheme } from "../data/wallpapers";
 import { applyTheme } from "../lib/theme";
+import { cacheThemeSelection } from "../lib/themeBootstrap";
 import { getEffectiveTheme, getThemeById } from "../config/themes";
 import { customWallpaperToTheme } from "../lib/customWallpapers";
 import {
@@ -434,13 +435,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     if (get().user?.id !== user.id) return normalized;
     set({ ...normalized, user, hydrated: true });
     await saveState(normalized, user.id);
-    applyTheme(
-      getEffectiveTheme(
-        normalized.settings.selectedThemeId,
-        isProUser,
-        normalized.settings.customWallpapers.map(customWallpaperToTheme),
-      ),
+    const effectiveTheme = getEffectiveTheme(
+      normalized.settings.selectedThemeId,
+      isProUser,
+      normalized.settings.customWallpapers.map(customWallpaperToTheme),
     );
+    applyTheme(effectiveTheme);
+    cacheThemeSelection(normalized.settings.selectedThemeId, effectiveTheme);
     return normalized;
   };
 
@@ -618,6 +619,14 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     setVerifiedPlanStatus: (isProUser, planName, entitlementReady = true) => {
       set({ isProUser, planName, entitlementReady });
+      const { settings } = get();
+      const effectiveTheme = getEffectiveTheme(
+        settings.selectedThemeId,
+        isProUser,
+        settings.customWallpapers.map(customWallpaperToTheme),
+      );
+      applyTheme(effectiveTheme);
+      cacheThemeSelection(settings.selectedThemeId, effectiveTheme);
     },
 
     clearWorkspaceStore: () => {
@@ -846,6 +855,19 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
               : state.wallpaperTheme,
         };
       });
+      if (
+        newSettings.selectedThemeId !== undefined ||
+        newSettings.customWallpapers !== undefined
+      ) {
+        const { settings, isProUser } = get();
+        const effectiveTheme = getEffectiveTheme(
+          settings.selectedThemeId,
+          isProUser,
+          settings.customWallpapers.map(customWallpaperToTheme),
+        );
+        applyTheme(effectiveTheme);
+        cacheThemeSelection(settings.selectedThemeId, effectiveTheme);
+      }
       get()._persist();
     },
 
@@ -865,6 +887,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         settings: { ...state.settings, selectedThemeId },
       }));
       applyTheme(theme);
+      cacheThemeSelection(selectedThemeId, theme);
       get()._persist();
     },
 

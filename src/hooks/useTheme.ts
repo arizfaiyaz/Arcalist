@@ -7,6 +7,7 @@ import {
   type ArcalistTheme,
 } from "../config/themes";
 import { applyTheme } from "../lib/theme";
+import { cacheThemeSelection } from "../lib/themeBootstrap";
 import {
   customWallpaperToTheme,
   refreshCustomWallpaperSignedUrls,
@@ -48,7 +49,8 @@ export function useTheme() {
 
   useEffect(() => {
     applyTheme(effectiveTheme);
-  }, [effectiveTheme]);
+    cacheThemeSelection(selectedThemeId, effectiveTheme);
+  }, [effectiveTheme, selectedThemeId]);
 
   useEffect(() => {
     if (!user || customWallpapers.length === 0) return;
@@ -80,6 +82,7 @@ export function useTheme() {
 
       updateSettings({ selectedThemeId: theme.id });
       applyTheme(theme);
+      cacheThemeSelection(theme.id, theme);
       return { ok: true, theme };
     },
     [customThemes, isThemeLocked, updateSettings],
