@@ -17,7 +17,7 @@ import { SharePageModal } from "../components/sharing/SharePageModal";
 import { usePlanLimits } from "../hooks/usePlanLimits";
 import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
-import { useEntitlementContext } from "../providers/EntitlementProvider";
+import { useEntitlementContext } from "../hooks/useEntitlement";
 import {
   canShareWorkspace,
   canUseProductivityAnalytics,
@@ -104,6 +104,32 @@ export function NewTabPage() {
         (board) => board.originalPageId !== activePage.originalPageId,
       ),
     );
+
+  useEffect(() => {
+    if (visiblePages.length === 0) return;
+    const fallbackPage = visiblePages[0];
+    const hasActiveVisiblePage =
+      !activeVisiblePageId ||
+      visiblePages.some((page) => page.id === activeVisiblePageId);
+    const hasCanonicalActivePage =
+      !activePageId ||
+      visiblePages.some(
+        (page) => page.id === activePageId || page.originalPageId === activePageId,
+      );
+
+    if (hasActiveVisiblePage && hasCanonicalActivePage) return;
+
+    const timeout = window.setTimeout(() => {
+      if (!hasActiveVisiblePage) {
+        setActiveVisiblePageId(null);
+      }
+      if (!hasCanonicalActivePage) {
+        setActivePage(fallbackPage.originalPageId || fallbackPage.id);
+      }
+    }, 0);
+
+    return () => window.clearTimeout(timeout);
+  }, [activePageId, activeVisiblePageId, setActivePage, visiblePages]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

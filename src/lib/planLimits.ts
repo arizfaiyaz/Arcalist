@@ -51,6 +51,7 @@ export type UserPlanLimits = {
   planName: PlanName;
   maxPages: number;
   maxBoardsPerPage: number;
+  loading?: boolean;
   canCreatePage: (currentPageCount: number) => boolean;
   canCreateBoard: (currentBoardCountForPage: number) => boolean;
 };
@@ -70,6 +71,7 @@ export type PlanVisibilityResult = {
   hiddenBoardCount: number;
   hiddenPageCount: number;
   hasHiddenData: boolean;
+  isPlanPending?: boolean;
 };
 
 export const getPlanLimits = (isPro: boolean): UserPlanLimits => {
@@ -142,6 +144,28 @@ export const getVisibleWorkspaceForPlan = ({
     order: 0,
     boards: [],
   };
+  const orderedBoards = orderedPages.flatMap((page) =>
+    byOrder(page.boards ?? []).map((board) => ({
+      ...board,
+      originalPageId: page.id,
+    })),
+  );
+
+  if (limits.loading) {
+    return {
+      visiblePages: [
+        {
+          ...sourceHomePage,
+          boards: orderedBoards,
+          originalPageId: sourceHomePage.id,
+        },
+      ],
+      hiddenBoardCount: 0,
+      hiddenPageCount: 0,
+      hasHiddenData: false,
+      isPlanPending: true,
+    };
+  }
 
   if (isProUser) {
     const visiblePages: PlanVisiblePage[] = (orderedPages.length > 0
@@ -172,12 +196,6 @@ export const getVisibleWorkspaceForPlan = ({
     visiblePageLimit === Infinity || visibleBoardLimit === Infinity
       ? Infinity
       : visiblePageLimit * visibleBoardLimit;
-  const orderedBoards = orderedPages.flatMap((page) =>
-    byOrder(page.boards ?? []).map((board) => ({
-      ...board,
-      originalPageId: page.id,
-    })),
-  );
   const visibleBoards = orderedBoards.slice(0, totalVisibleBoardSlots);
   const neededPageCount = Math.min(
     visiblePageLimit,

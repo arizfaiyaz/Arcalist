@@ -1,5 +1,6 @@
 import type { ArcalistState } from "../types";
 import { browserApi } from "./browserApi";
+import { canonicalizeToHomeWorkspace } from "./chromeBookmarks";
 
 export const LEGACY_WORKSPACE_STORAGE_KEY = "arcalist_state";
 export const ACTIVE_USER_STORAGE_KEY = "arcalist_active_user";
@@ -20,8 +21,9 @@ export async function saveState(
   userId: string,
 ): Promise<void> {
   try {
+    const canonicalState = canonicalizeToHomeWorkspace(state);
     await browserApi.storage.set({
-      [getWorkspaceStorageKey(userId)]: state,
+      [getWorkspaceStorageKey(userId)]: canonicalState,
       [ACTIVE_USER_STORAGE_KEY]: userId,
     })
   } catch (err) {
@@ -33,7 +35,7 @@ export async function loadState(userId: string): Promise<ArcalistState | null> {
   try {
     const key = getWorkspaceStorageKey(userId);
     const result = await browserApi.storage.get<Record<string, ArcalistState | undefined>>(key)
-    return result[key] ?? null
+    return result[key] ? canonicalizeToHomeWorkspace(result[key]) : null
   } catch (err) {
     console.error('[Arcalist] Failed to load state:', err)
     return null

@@ -1,4 +1,5 @@
 import { setBookmarkMap } from "./chromeBookmarkMap";
+import { canonicalizeToHomeWorkspace } from "./chromeBookmarks";
 import { markDirty } from "./sync/syncStorage";
 import { getWorkspaceStorageKey } from "./storage";
 import { getSafeDomain, normalizeSafeUrl } from "./urlSafety";
@@ -271,9 +272,11 @@ export async function importChromeBookmarks(
 
   const migrated = mergeImportedPageIntoHome(state);
   if (migrated) {
-    await chrome.storage.local.set({ [storageKey]: migrated });
+    await chrome.storage.local.set({
+      [storageKey]: canonicalizeToHomeWorkspace(migrated),
+    });
     await markDirty();
-    return migrated;
+    return canonicalizeToHomeWorkspace(migrated);
   }
 
   const homePage = state.pages.find((page) => page.title === HOME_PAGE_TITLE);
@@ -301,11 +304,11 @@ export async function importChromeBookmarks(
   }
 
   await chrome.storage.local.set({
-    [storageKey]: parsed.state,
+    [storageKey]: canonicalizeToHomeWorkspace(parsed.state),
     [importFlagKey]: true,
   });
   await markDirty();
   await setBookmarkMap(parsed.map);
 
-  return parsed.state;
+  return canonicalizeToHomeWorkspace(parsed.state);
 }

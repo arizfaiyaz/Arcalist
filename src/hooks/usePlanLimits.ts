@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { getPlanLimits } from "../lib/planLimits";
-import { useEntitlementContext } from "../providers/EntitlementProvider";
+import { useEntitlementContext } from "./useEntitlement";
 
 export function usePlanLimits() {
   const { isPro, loading } = useEntitlementContext();

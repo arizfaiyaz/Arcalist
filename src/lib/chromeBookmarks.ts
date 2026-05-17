@@ -238,7 +238,7 @@ export function buildHomeWorkspaceFromChromeBookmarks(
   };
 }
 
-export function canonicalizeWorkspaceAsHome(
+export function canonicalizeToHomeWorkspace(
   workspace: ArcalistState,
 ): ArcalistState {
   const boards = byOrder(workspace.pages ?? [])
@@ -264,3 +264,5 @@ export function canonicalizeWorkspaceAsHome(
     overflowBoards: [],
   };
 }
+
+export const canonicalizeWorkspaceAsHome = canonicalizeToHomeWorkspace;

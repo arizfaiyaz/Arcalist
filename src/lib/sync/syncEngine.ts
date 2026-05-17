@@ -1,5 +1,6 @@
 import { supabase } from "../supabase";
 import { resolveAuthenticatedPlanStatus } from "../plan";
+import { canonicalizeToHomeWorkspace } from "../chromeBookmarks";
 import { getDeviceInfo, updateDeviceLastSeen } from "../device";
 import type { ArcalistState } from "../../types";
 import type { ArcalistDevice, CloudWorkspaceRow } from "../../types/sync";
@@ -92,7 +93,7 @@ export async function pullFromCloud(
     lastPulledAt: new Date().toISOString(),
   });
 
-  return workspace;
+  return canonicalizeToHomeWorkspace(workspace);
 }
 
 async function pullCloudWorkspace(userId: string): Promise<CloudWorkspace | null> {
@@ -110,7 +111,7 @@ async function pullCloudWorkspace(userId: string): Promise<CloudWorkspace | null
   if (!workspace) return null;
 
   return {
-    workspace,
+    workspace: canonicalizeToHomeWorkspace(workspace),
     version: row?.version ?? 1,
     updatedAt: row?.updated_at ?? undefined,
     updatedByDeviceId: row?.updated_by_device_id ?? undefined,
@@ -137,13 +138,14 @@ export async function pushToCloud(
   const meta = await getSyncMeta();
   const nextVersion = Math.max(meta.cloudVersion ?? 0, meta.localVersion ?? 0) + 1;
   const updatedAt = new Date().toISOString();
+  const canonicalWorkspace = canonicalizeToHomeWorkspace(workspace);
 
   // TODO: Frontend gating is not enough. This must also be protected by RLS,
   // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.from(WORKSPACE_TABLE).upsert(
     {
       user_id: userId,
-      state: workspace,
+      state: canonicalWorkspace,
       version: nextVersion,
       updated_at: updatedAt,
       updated_by_device_id: device.id,
@@ -159,7 +161,7 @@ export async function pushToCloud(
     const fallback = await supabase.from(WORKSPACE_TABLE).upsert(
       {
         user_id: userId,
-        state: workspace,
+        state: canonicalWorkspace,
         updated_at: updatedAt,
       },
       {
@@ -183,7 +185,9 @@ export function resolveConflict(
   localWorkspace: ArcalistState,
   cloudWorkspace: ArcalistState,
 ): ArcalistState {
-  return resolveWorkspaceConflict(localWorkspace, cloudWorkspace);
+  return canonicalizeToHomeWorkspace(
+    resolveWorkspaceConflict(localWorkspace, cloudWorkspace),
+  );
 }
 
 export async function syncNow(
@@ -226,7 +230,9 @@ export async function syncNow(
   await updateSyncMeta({ status: "syncing", error: undefined });
 
   try {
-    const localWorkspace = currentWorkspace ?? (await loadLocalWorkspace());
+    const localWorkspace = currentWorkspace
+      ? canonicalizeToHomeWorkspace(currentWorkspace)
+      : await loadLocalWorkspace();
     if (!localWorkspace) {
       await updateSyncMeta({ status: "idle" });
       return null;
@@ -242,7 +248,9 @@ export async function syncNow(
     const localChanged =
       meta.dirty ||
       workspaceTimestamp(localWorkspace) > workspaceTimestamp(cloud.workspace);
-    const resolved = resolveWorkspaceConflict(localWorkspace, cloud.workspace);
+    const resolved = canonicalizeToHomeWorkspace(
+      resolveWorkspaceConflict(localWorkspace, cloud.workspace),
+    );
 
     if (willOverwriteLocal(localWorkspace, resolved)) {
       await createWorkspaceBackup(localWorkspace);

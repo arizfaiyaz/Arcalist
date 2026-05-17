@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { supabase } from "../lib/supabase";
 import {
   getCurrentUserEntitlement,
@@ -14,6 +21,16 @@ export type EntitlementHookState = {
   plan: PlanName;
   refreshEntitlement: () => Promise<UserEntitlement | null>;
 };
+
+export const EntitlementContext = createContext<EntitlementHookState | null>(null);
+
+export function useEntitlementContext() {
+  const context = useContext(EntitlementContext);
+  if (!context) {
+    throw new Error("useEntitlementContext must be used within EntitlementProvider");
+  }
+  return context;
+}
 
 export function useEntitlement(): EntitlementHookState {
   const [entitlement, setEntitlement] = useState<UserEntitlement | null>(null);

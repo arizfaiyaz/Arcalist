@@ -3,6 +3,7 @@ import {
   ACTIVE_USER_STORAGE_KEY,
   getWorkspaceStorageKey,
 } from "../storage";
+import { canonicalizeToHomeWorkspace } from "../chromeBookmarks";
 import type { ArcalistState } from "../../types";
 import type { SyncMeta, SyncPlanStatus } from "../../types/sync";
 
@@ -71,13 +72,15 @@ export async function loadLocalWorkspace(): Promise<ArcalistState | null> {
   if (!userId) return null;
   const key = getWorkspaceStorageKey(userId);
   const result = await browserApi.storage.get<Record<string, ArcalistState | undefined>>(key);
-  return result[key] ?? null;
+  return result[key] ? canonicalizeToHomeWorkspace(result[key]) : null;
 }
 
 export async function saveLocalWorkspace(state: ArcalistState): Promise<void> {
   const userId = await getActiveUserId();
   if (!userId) return;
-  await browserApi.storage.set({ [getWorkspaceStorageKey(userId)]: state });
+  await browserApi.storage.set({
+    [getWorkspaceStorageKey(userId)]: canonicalizeToHomeWorkspace(state),
+  });
 }
 
 export async function createWorkspaceBackup(

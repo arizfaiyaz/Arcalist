@@ -15,7 +15,7 @@ import {
 import { addMapping, getBookmarkMap, removeMapping } from "../lib/chromeBookmarkMap";
 import {
   buildHomeWorkspaceFromChromeBookmarks,
-  canonicalizeWorkspaceAsHome,
+  canonicalizeToHomeWorkspace,
   fetchChromeBookmarkTree,
   HOME_PAGE_ID,
 } from "../lib/chromeBookmarks";
@@ -430,7 +430,7 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     user: User,
     isProUser = get().isProUser,
   ) => {
-    const normalized = normalizeState(workspace);
+    const normalized = normalizeState(canonicalizeToHomeWorkspace(workspace));
     if (get().user?.id !== user.id) return normalized;
     set({ ...normalized, user, hydrated: true });
     await saveState(normalized, user.id);
@@ -556,10 +556,12 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     hydrateWorkspaceForUser: async (user) => {
+      const keepVisibleWorkspace =
+        get().hydrated && get().user?.id === user.id && get().pages.length > 0;
       set({
         user,
         authReady: true,
-        hydrated: false,
+        hydrated: keepVisibleWorkspace,
         signingIn: false,
         isProUser: false,
         planName: "free",
@@ -572,11 +574,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       if (get().user?.id !== user.id) return;
 
       if (cachedWorkspace) {
-        const renderableCachedWorkspace = canUseChromeBookmarks()
-          ? canonicalizeWorkspaceAsHome(cachedWorkspace)
-          : cachedWorkspace;
         await applyWorkspace(
-          renderableCachedWorkspace,
+          cachedWorkspace,
           user,
           get().isProUser,
         );
@@ -805,18 +804,19 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
       set({ syncStatus: "syncing" });
       try {
+        const canonicalWorkspace = canonicalizeToHomeWorkspace({
+          pages,
+          activePageId,
+          trash,
+          overflowBoards,
+          privacyMode,
+          settings,
+          wallpaperTheme,
+          updatedAt,
+        });
         await pushToCloud(
           userId,
-          {
-            pages,
-            activePageId,
-            trash,
-            overflowBoards,
-            privacyMode,
-            settings,
-            wallpaperTheme,
-            updatedAt,
-          },
+          canonicalWorkspace,
           limits.isProUser,
         );
         set({ syncStatus: "synced" });

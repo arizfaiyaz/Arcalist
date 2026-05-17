@@ -1,7 +1,6 @@
 import { addMapping, getBookmarkMap } from "./chromeBookmarkMap";
-import { FREE_LIMITS } from "./planLimits";
 import { createBookmarkFromNode } from "./importBookmarks";
-import { resolveAuthenticatedPlanStatus } from "./plan";
+import { canonicalizeToHomeWorkspace } from "./chromeBookmarks";
 import { markDirty } from "./sync/syncStorage";
 import {
   getStoredAuthState,
@@ -62,9 +61,9 @@ export async function autoSyncChromeBookmarks(
       return false;
     }
 
+    state = canonicalizeToHomeWorkspace(state);
     const boardUrlMap = buildBoardUrlMap(state);
     const map = await getBookmarkMap();
-    const plan = await resolveAuthenticatedPlanStatus(userId);
     const lastSyncKey = `${LAST_SYNC_KEY}:${userId}`;
     const lastSyncResult = await chrome.storage.local.get(lastSyncKey);
     const lastSyncTime = (lastSyncResult[lastSyncKey] as number) ?? 0;
@@ -109,12 +108,6 @@ export async function autoSyncChromeBookmarks(
       }
 
       if (!board) {
-        if (
-          !plan.isProUser &&
-          targetPage.boards.length >= FREE_LIMITS.boardsPerPage
-        ) {
-          return null;
-        }
         board = {
           id: generateId(),
           title: folderTitle,
@@ -174,8 +167,9 @@ export async function autoSyncChromeBookmarks(
 
     if (hasChanges) {
       state.updatedAt = Date.now();
+      const canonicalState = canonicalizeToHomeWorkspace(state);
       await chrome.storage.local.set({
-        [getWorkspaceStorageKey(userId)]: state,
+        [getWorkspaceStorageKey(userId)]: canonicalState,
       });
       await markDirty();
       await chrome.storage.local.set({

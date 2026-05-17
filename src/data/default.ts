@@ -5,7 +5,7 @@ const favicon = (domain: string) =>
   `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
 
 export const defaultState: ArcalistState = {
-  activePageId: "page-1",
+  activePageId: "home",
   trash: [],
   overflowBoards: [],
   privacyMode: false, // persisted now
@@ -26,7 +26,7 @@ export const defaultState: ArcalistState = {
   wallpaperTheme: DEFAULT_WALLPAPER,
   pages: [
     {
-      id: "page-1",
+      id: "home",
       title: "Home",
       order: 0,
       boards: [
@@ -107,17 +107,10 @@ export const defaultState: ArcalistState = {
             },
           ],
         },
-      ],
-    },
-    {
-      id: "page-2",
-      title: "Work",
-      order: 1,
-      boards: [
         {
           id: "board-4",
           title: "Communication",
-          order: 0,
+          order: 3,
           bookmarks: [
             {
               id: "bm-9",

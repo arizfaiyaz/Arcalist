@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { getDeviceInfo } from "../lib/device";
 import { syncNow } from "../lib/sync";
+import { canonicalizeToHomeWorkspace } from "../lib/chromeBookmarks";
 import {
   getSyncMeta,
   setPlanStatus,
@@ -61,7 +62,10 @@ export function useCrossBrowserSync() {
       if (enabled && user) {
         const synced = await syncNow(user.id, getCurrentWorkspace(), cloudSyncAllowed);
         if (synced) {
-          useArcalistStore.setState({ ...synced, syncStatus: "synced" });
+          useArcalistStore.setState({
+            ...canonicalizeToHomeWorkspace(synced),
+            syncStatus: "synced",
+          });
         }
       }
       await refresh();
@@ -76,7 +80,7 @@ export function useCrossBrowserSync() {
     if (synced) {
       const nextMeta = await getSyncMeta();
       useArcalistStore.setState({
-        ...synced,
+        ...canonicalizeToHomeWorkspace(synced),
         syncStatus: nextMeta.status === "conflict" ? "conflict" : "synced",
       });
     }
