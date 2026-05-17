@@ -1,19 +1,11 @@
 import {
-  getBookmarkMap,
-  addMapping,
-  removeMapping,
-} from "../lib/chromeBookmarkMap";
-import { importChromeBookmarks } from "../lib/importBookmarks";
-import {
   initializeAutoSync,
   handleAutoSyncAlarm,
 } from "../lib/autoSync";
-import { markDirty } from "../lib/sync/syncStorage";
 import {
   getStoredAuthState,
   getWorkspaceStorageKey,
 } from "../lib/storage";
-import { FREE_LIMITS } from "../lib/planLimits";
 import { resolveAuthenticatedPlanStatus } from "../lib/plan";
 import { getSafeDomain, normalizeSafeUrl } from "../lib/urlSafety";
 import { getDomainFromUrl, getFaviconForDomain } from "../lib/domain";
@@ -28,7 +20,7 @@ import {
   type AnalyticsPlanStatus,
   type ProductivityAnalyticsState,
 } from "../lib/productivityAnalytics";
-import type { ArcalistState, Board, Page } from "../types";
+import type { ArcalistState } from "../types";
 
 const ANALYTICS_ALARM_NAME = "arcalist-analytics-flush";
 const ANALYTICS_IDLE_THRESHOLD_SECONDS = 60;
@@ -50,14 +42,6 @@ let currentIdleState: IdleStateValue = "active";
 
 // ─── Helpers ─────────────────────────────────────────────
 
-function generateId(): string {
-  return Math.random().toString(36).slice(2, 8);
-}
-
-function favicon(domain: string): string {
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
-}
-
 function getHostname(url: string): string | null {
   return getSafeDomain(url);
 }
@@ -69,15 +53,6 @@ async function getState(): Promise<{ state: ArcalistState; userId: string } | nu
   const result = await chrome.storage.local.get(storageKey);
   const state = result[storageKey] as ArcalistState | undefined;
   return state ? { state, userId: authState.userId } : null;
-}
-
-async function saveState(state: object, userId: string) {
-  const authState = await getStoredAuthState();
-  if (!authState.isAuthenticated || authState.userId !== userId) return;
-  await chrome.storage.local.set({
-    [getWorkspaceStorageKey(userId)]: state,
-  });
-  await markDirty();
 }
 
 function notifyNewTab() {
@@ -215,14 +190,6 @@ async function startSessionForTab(tab: chrome.tabs.Tab | null) {
   };
 }
 
-function canCreateBackgroundBoard(state: ArcalistState) {
-  return resolveAuthenticatedPlanStatus().then((plan) => {
-    if (plan.isProUser) return true;
-    const firstPage = state.pages?.[0];
-    return (firstPage?.boards?.length ?? 0) < FREE_LIMITS.boardsPerPage;
-  });
-}
-
 function isAnalyticsPlanStatus(value: unknown): value is AnalyticsPlanStatus {
   if (!value || typeof value !== "object") return false;
   const plan = value as Partial<AnalyticsPlanStatus>;
@@ -258,17 +225,6 @@ function isAnalyticsMessage(
   }
 }
 
-function createTrashedItemsForBoard(board: Board, page: Page) {
-  return (board.bookmarks ?? []).map((bookmark) => ({
-    bookmark: { ...bookmark, isTrashed: true },
-    deletedAt: Date.now(),
-    fromBoardTitle: board.title,
-    fromPageTitle: page.title,
-    fromBoardId: board.id,
-    fromPageId: page.id,
-  }));
-}
-
 async function restartTrackingForActiveTab(windowId?: number) {
   const tab = await getActiveTab(windowId);
   await startSessionForTab(tab);
@@ -297,18 +253,12 @@ function initializeAnalyticsTracking() {
 // ─── Install ─────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  const authState = await getStoredAuthState();
-
   // Initialize auto-sync on install or update
   await initializeAutoSync();
   initializeAnalyticsTracking();
 
-  if (
-    details.reason === "install" &&
-    authState.isAuthenticated &&
-    authState.userId
-  ) {
-    await importChromeBookmarks(undefined, authState.userId);
+  if (details.reason === "install") {
+    notifyNewTab();
   }
 });
 
@@ -486,7 +436,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   const loaded = await getState();
   if (!loaded) return;
-  const { state, userId } = loaded;
+  const { state } = loaded;
 
   const firstPage = state.pages?.[0];
   if (!firstPage) return;
@@ -504,156 +454,37 @@ chrome.commands.onCommand.addListener(async (command) => {
 
   if (!targetBoard) return;
 
-  const now = new Date().toISOString();
-  targetBoard.bookmarks.unshift({
-    id: generateId(),
+  const parentId = targetBoard.chromeFolderId;
+  if (!parentId) return;
+
+  await chrome.bookmarks.create({
+    parentId,
     title: tab.title,
     url: safeUrl,
-    favicon: favicon(domain),
-    createdAt: now,
-    updatedAt: now,
-    visitCount: 0,
   });
-  state.updatedAt = Date.now();
-
-  await saveState(state, userId);
 
   chrome.runtime.sendMessage({ type: "QUICK_SAVE_DONE" }).catch(() => {});
 });
 
 // ─── Chrome Bookmarks Bridge ──────────────────────────────
 
-// Fires when user creates a bookmark OR a folder in Chrome
-chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
-  const loaded = await getState();
-  if (!loaded || !loaded.state.pages?.length) return;
-  const { state, userId } = loaded;
-
-  const isFolder = !bookmark.url;
-
-  if (isFolder) {
-    if (!(await canCreateBackgroundBoard(state))) return;
-
-    // User created a new folder in Chrome → create a matching Board in Arcalist
-    const newBoard = {
-      id: generateId(),
-      title: bookmark.title || "New Board",
-      order: 0,
-      bookmarks: [],
-      chromeFolderId: id,
-    };
-
-    // Add to the first page
-    const firstPage = state.pages[0];
-    firstPage.boards = firstPage.boards ?? [];
-    firstPage.boards.push(newBoard);
-
-    await saveState(state, userId);
-
-    // Remember the mapping so we know where to put bookmarks later
-    await addMapping(id, newBoard.id);
-
-    notifyNewTab();
-  } else if (bookmark.url) {
-    // User bookmarked a site inside a Chrome folder
-    // Check if that folder is mapped to an Arcalist board
-    const map = await getBookmarkMap();
-    const boardId = bookmark.parentId ? map[bookmark.parentId] : null;
-
-    if (!boardId) return; // Folder not tracked by Arcalist — ignore
-
-    const safeUrl = normalizeSafeUrl(bookmark.url);
-    if (!safeUrl) return;
-    const domain = getHostname(safeUrl);
-    if (!domain) return;
-
-    const now = new Date().toISOString();
-    const newBookmark = {
-      id: generateId(),
-      title: bookmark.title || domain,
-      url: safeUrl,
-      favicon: favicon(domain),
-      chromeBookmarkId: id,
-      createdAt: now,
-      updatedAt: now,
-      visitCount: 0,
-    };
-
-    // Find the target board across all pages and add the bookmark
-    let added = false;
-    for (const page of state.pages) {
-      for (const board of page.boards ?? []) {
-        if (board.id === boardId) {
-          board.bookmarks = board.bookmarks ?? [];
-          board.bookmarks.push(newBookmark);
-          added = true;
-          break;
-        }
-      }
-      if (added) break;
-    }
-
-    if (added) {
-      state.updatedAt = Date.now();
-      await saveState(state, userId);
-      notifyNewTab();
-    }
-  }
-});
-
-// Fires when user renames a folder or bookmark in Chrome
-chrome.bookmarks.onChanged.addListener(async (id, changeInfo) => {
-  const map = await getBookmarkMap();
-  const boardId = map[id];
-
-  if (!boardId) return; // Not a tracked folder
-
-  const loaded = await getState();
-  if (!loaded) return;
-  const { state, userId } = loaded;
-
-  // Rename the matching board
-  for (const page of state.pages) {
-    for (const board of page.boards ?? []) {
-      if (board.id === boardId) {
-        board.title = changeInfo.title ?? board.title;
-        break;
-      }
-    }
-  }
-
-  await saveState(state, userId);
+chrome.bookmarks.onCreated.addListener((_id, bookmark) => {
+  if (!bookmark.url) return;
   notifyNewTab();
 });
 
-// Fires when user deletes a bookmark or folder in Chrome
-chrome.bookmarks.onRemoved.addListener(async (id) => {
-  const map = await getBookmarkMap();
-  const boardId = map[id];
+chrome.bookmarks.onChanged.addListener(() => {
+  notifyNewTab();
+});
 
-  if (!boardId) return; // Not a tracked folder — ignore
+chrome.bookmarks.onRemoved.addListener(() => {
+  notifyNewTab();
+});
 
-  const loaded = await getState();
-  if (!loaded) return;
-  const { state, userId } = loaded;
+chrome.bookmarks.onMoved.addListener(() => {
+  notifyNewTab();
+});
 
-  // Move the matching board's bookmarks to trash before removing the board.
-  const trashedItems = [];
-  for (const page of state.pages) {
-    const board = page.boards?.find(
-      (b: { id: string }) => b.id === boardId,
-    ) as Board | undefined;
-    if (board) {
-      trashedItems.push(...createTrashedItemsForBoard(board, page));
-    }
-    page.boards = (page.boards ?? []).filter(
-      (b: { id: string }) => b.id !== boardId,
-    );
-  }
-  state.trash = [...(state.trash ?? []), ...trashedItems];
-  state.updatedAt = Date.now();
-
-  await saveState(state, userId);
-  await removeMapping(id);
+chrome.bookmarks.onChildrenReordered?.addListener(() => {
   notifyNewTab();
 });

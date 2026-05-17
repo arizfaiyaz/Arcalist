@@ -39,6 +39,8 @@ export function NewTabPage() {
   const cleanupTrash = useArcalistStore((state) => state.cleanupTrash);
   const planLimits = usePlanLimits();
   const { loading: entitlementLoading } = useEntitlementContext();
+  const planLoading = planLimits.loading;
+  const shouldShowProBadge = !planLoading && !planLimits.isProUser;
   const { effectiveTheme } = useTheme();
   const visibleWorkspace = useMemo(
     () => getVisibleWorkspaceForPlan({ pages, limits: planLimits }),
@@ -167,10 +169,9 @@ export function NewTabPage() {
   };
 
   const handleSmartCollectionsOpen = () => {
-    if (
-      entitlementLoading ||
-      !canUseSmartCollections(planLimits.isProUser)
-    ) {
+    if (entitlementLoading) return;
+
+    if (!canUseSmartCollections(planLimits.isProUser)) {
       setUpgradePrompt({
         title: "Smart Collections are available with Arcalist Pro.",
         description:
@@ -183,10 +184,9 @@ export function NewTabPage() {
   };
 
   const handleAnalyticsOpen = () => {
-    if (
-      entitlementLoading ||
-      !canUseProductivityAnalytics(planLimits.isProUser)
-    ) {
+    if (entitlementLoading) return;
+
+    if (!canUseProductivityAnalytics(planLimits.isProUser)) {
       setUpgradePrompt({
         title: "Productivity analytics are available with Arcalist Pro.",
         description:
@@ -321,8 +321,8 @@ export function NewTabPage() {
             setSelectedBookmarks([]);
           }}
           multiSelectMode={multiSelectMode}
-          smartCollectionsLocked={entitlementLoading || !planLimits.isProUser}
-          analyticsLocked={entitlementLoading || !planLimits.isProUser}
+          smartCollectionsLocked={shouldShowProBadge}
+          analyticsLocked={shouldShowProBadge}
         />
       </aside>
 

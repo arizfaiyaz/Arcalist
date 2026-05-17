@@ -3,7 +3,10 @@ import { getPlanLimits } from "../lib/planLimits";
 import { useEntitlementContext } from "../providers/EntitlementProvider";
 
 export function usePlanLimits() {
-  const { isPro } = useEntitlementContext();
+  const { isPro, loading } = useEntitlementContext();
 
-  return useMemo(() => getPlanLimits(isPro), [isPro]);
+  return useMemo(
+    () => ({ ...getPlanLimits(isPro), loading }),
+    [isPro, loading],
+  );
 }

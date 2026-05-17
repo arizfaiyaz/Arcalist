@@ -213,13 +213,17 @@ function BookmarkResult({
   const favicon = bookmark.favicon ?? bookmark.faviconUrl ?? "";
   const domain = getDomainFromUrl(bookmark.url);
 
-  const handleOpen = () => {
+  const handleOpen = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     if (openSafeUrl(bookmark.url, openInNewTab ? "_blank" : "_self")) {
       recordBookmarkVisit(bookmark.boardId, bookmark.bookmarkId);
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     const confirmed = window.confirm(
       `Move "${bookmark.title || bookmark.url}" to trash?`,
     );
@@ -255,6 +259,7 @@ function BookmarkResult({
       <div className="flex shrink-0 items-center gap-1">
         <button
           type="button"
+          data-no-dnd="true"
           onClick={handleOpen}
           title="Open bookmark"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-accent)]"
@@ -263,7 +268,12 @@ function BookmarkResult({
         </button>
         <button
           type="button"
-          onClick={() => onEdit(bookmark)}
+          data-no-dnd="true"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onEdit(bookmark);
+          }}
           title="Edit original bookmark"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-accent)]"
         >
@@ -271,6 +281,7 @@ function BookmarkResult({
         </button>
         <button
           type="button"
+          data-no-dnd="true"
           onClick={handleDelete}
           title="Move original bookmark to trash"
           className="flex h-7 w-7 items-center justify-center rounded-md text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"

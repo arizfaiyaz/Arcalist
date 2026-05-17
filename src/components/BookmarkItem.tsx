@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { GripVertical, Trash2, ExternalLink, Pencil } from "lucide-react";
+import { Trash2, ExternalLink, Pencil } from "lucide-react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { cn } from "../lib/utils";
@@ -42,23 +42,12 @@ export function BookmarkItem({
   const pointerMovedRef = useRef(false);
   const [isHovered, setIsHovered] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const revealActionClass = cn(
-    "opacity-0 pointer-events-none -translate-x-1",
-    "transition-all duration-150",
-    "group-hover/bookmark:opacity-100 group-hover/bookmark:pointer-events-auto group-hover/bookmark:translate-x-0",
-    "group-focus-within/bookmark:opacity-100 group-focus-within/bookmark:pointer-events-auto group-focus-within/bookmark:translate-x-0",
-  );
-  const rowActionClass = cn(
-    "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
-    revealActionClass,
-    "text-[var(--arc-text-secondary)]",
-  );
   const inlineActionClass = cn(
-    "flex h-7 w-7 items-center justify-center rounded-md",
+    "flex h-6 w-6 items-center justify-center rounded-md",
     "text-[var(--arc-text-secondary)]",
   );
   const rightActionsClass = cn(
-    "absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1",
+    "absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-1",
     "opacity-0 pointer-events-none -translate-x-1",
     "transition-all duration-150",
     "group-hover/bookmark:opacity-100 group-hover/bookmark:pointer-events-auto group-hover/bookmark:translate-x-0",
@@ -124,9 +113,17 @@ export function BookmarkItem({
     setContextMenu(null);
   };
 
-  const handleTrash = () => {
+  const handleTrash = (event?: React.MouseEvent) => {
+    event?.preventDefault();
+    event?.stopPropagation();
     trashBookmark(boardId, bookmark.id);
     setContextMenu(null);
+  };
+
+  const handleEdit = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEditOpen(true);
   };
 
   const handleOpenBookmark = (event: React.MouseEvent) => {
@@ -176,17 +173,22 @@ export function BookmarkItem({
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         className={cn(
-          "group/bookmark relative flex items-center gap-2.5 rounded-lg py-1.5 pl-2.5 pr-16",
+          "group/bookmark relative flex items-center gap-2 rounded-xl px-2.5 py-2 pr-16",
+          "text-[var(--arc-text-primary)]",
           "hover:bg-[var(--arc-button-bg)] transition-colors duration-150",
           "cursor-grab active:cursor-grabbing",
           isSelected && "border border-[var(--arc-accent)] bg-[var(--arc-button-active-bg)]",
         )}
       >
-        {/* Checkbox in multi-select mode, grip handle otherwise */}
-        {multiSelectMode ? (
+        {multiSelectMode && (
           <button
             type="button"
-            onClick={() => onSelect?.(bookmark.id)}
+            data-no-dnd="true"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              onSelect?.(bookmark.id);
+            }}
             aria-label={isSelected ? "Deselect bookmark" : "Select bookmark"}
             className={cn(
               "flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-all",
@@ -207,20 +209,10 @@ export function BookmarkItem({
               </svg>
             )}
           </button>
-        ) : (
-          <span
-            aria-hidden="true"
-            className={cn(
-              rowActionClass,
-              "touch-none",
-            )}
-          >
-            <GripVertical size={12} />
-          </span>
         )}
 
         {/* Clickable link */}
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <div
             className="flex min-w-0 w-full items-center gap-2 text-left"
           >
@@ -235,7 +227,7 @@ export function BookmarkItem({
                 <img
                   src={bookmark.favicon}
                   alt=""
-                  className="w-4 h-4 rounded-sm"
+                  className="h-4 w-4 shrink-0 rounded-sm"
                   onError={() => setImgError(true)}
                 />
               ) : (
@@ -272,7 +264,7 @@ export function BookmarkItem({
           <button
             data-no-dnd="true"
             type="button"
-            onClick={() => setEditOpen(true)}
+            onClick={handleEdit}
             aria-label={`Edit ${bookmark.title}`}
             className={cn(
               inlineActionClass,
@@ -328,7 +320,7 @@ export function BookmarkItem({
           <ContextMenuItem
             icon={Trash2}
             label="Move to trash"
-            onClick={handleTrash}
+            onClick={() => handleTrash()}
             danger
           />
         </div>
@@ -361,7 +353,12 @@ function ContextMenuItem({
   return (
     <button
       type="button"
-      onClick={onClick}
+      data-no-dnd="true"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onClick();
+      }}
       className={cn(
         "arc-menu-item",
         danger && "hover:text-red-400 hover:bg-red-400/10",

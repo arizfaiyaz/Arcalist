@@ -22,6 +22,8 @@ export type Board = {
   bookmarks: Bookmark[]
   order: number
   chromeFolderId?: string
+  chromeParentId?: string
+  chromeIndex?: number
   updatedAt?: number | string
   deletedAt?: string
 }

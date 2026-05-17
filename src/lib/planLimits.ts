@@ -136,9 +136,18 @@ export const getVisibleWorkspaceForPlan = ({
   maxBoardsPerPage?: number;
 }): PlanVisibilityResult => {
   const orderedPages = byOrder(pages ?? []);
+  const sourceHomePage = orderedPages[0] ?? {
+    id: "home",
+    title: "Home",
+    order: 0,
+    boards: [],
+  };
 
   if (isProUser) {
-    const visiblePages: PlanVisiblePage[] = orderedPages.map((page) => ({
+    const visiblePages: PlanVisiblePage[] = (orderedPages.length > 0
+      ? orderedPages
+      : [sourceHomePage]
+    ).map((page) => ({
       ...page,
       boards: byOrder(page.boards ?? []).map((board) => ({
         ...board,
@@ -170,19 +179,14 @@ export const getVisibleWorkspaceForPlan = ({
     })),
   );
   const visibleBoards = orderedBoards.slice(0, totalVisibleBoardSlots);
-  const existingVisiblePageCount = Math.min(orderedPages.length, visiblePageLimit);
   const neededPageCount = Math.min(
     visiblePageLimit,
-    Math.max(
-      existingVisiblePageCount,
-      Math.ceil(visibleBoards.length / visibleBoardLimit),
-    ),
+    Math.max(1, Math.ceil(visibleBoards.length / visibleBoardLimit)),
   );
 
   const visiblePages: PlanVisiblePage[] = Array.from(
     { length: neededPageCount },
     (_, index) => {
-      const originalPage = orderedPages[index];
       const boards =
         visibleBoardLimit === Infinity
           ? visibleBoards
@@ -191,11 +195,11 @@ export const getVisibleWorkspaceForPlan = ({
               (index + 1) * visibleBoardLimit,
             );
 
-      if (originalPage) {
+      if (index === 0) {
         return {
-          ...originalPage,
+          ...sourceHomePage,
           boards,
-          originalPageId: originalPage.id,
+          originalPageId: sourceHomePage.id,
         };
       }
 

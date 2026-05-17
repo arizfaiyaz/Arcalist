@@ -6,15 +6,21 @@ import {
   saveState,
   setStoredAuthState,
 } from "../lib/storage";
-import { markDirty, pushToCloud, resolveConflict, syncNow } from "../lib/sync";
+import { markDirty, pullFromCloud, pushToCloud } from "../lib/sync";
 import {
   getSyncMeta,
   setPlanStatus,
   updateSyncMeta,
 } from "../lib/sync/syncStorage";
-import { autoSyncChromeBookmarks } from "../lib/autoSync.ts";
-import { importChromeBookmarks } from "../lib/importBookmarks";
 import { addMapping, getBookmarkMap, removeMapping } from "../lib/chromeBookmarkMap";
+import {
+  buildHomeWorkspaceFromChromeBookmarks,
+  canonicalizeWorkspaceAsHome,
+  fetchChromeBookmarkTree,
+  HOME_PAGE_ID,
+} from "../lib/chromeBookmarks";
+import { mergeCloudWorkspaceIntoChrome } from "../lib/bookmarkMerge";
+import { resolveAuthenticatedPlanStatus } from "../lib/plan";
 import { supabase } from "../lib/supabase";
 import { defaultState } from "../data/default";
 import { DEFAULT_WALLPAPER, toWallpaperTheme } from "../data/wallpapers";
@@ -381,6 +387,132 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     }
   };
 
+  const buildChromeFirstWorkspace = async (
+    userId: string,
+  ): Promise<ArcalistState> => {
+    const local = await loadState(userId);
+    const base: ArcalistState = {
+      ...defaultState,
+      ...(local ?? {}),
+      pages: [],
+      activePageId: HOME_PAGE_ID,
+      overflowBoards: [],
+      updatedAt: Date.now(),
+      settings: {
+        ...defaultState.settings,
+        ...(local?.settings ?? {}),
+      },
+      wallpaperTheme: local?.wallpaperTheme ?? DEFAULT_WALLPAPER,
+      trash: local?.trash ?? [],
+      privacyMode: local?.privacyMode ?? false,
+    };
+
+    if (!canUseChromeBookmarks()) {
+      if (local) return normalizeState(local);
+      return normalizeState(base);
+    }
+
+    const chromeWorkspace = buildHomeWorkspaceFromChromeBookmarks(
+      await fetchChromeBookmarkTree(),
+      base,
+    );
+    return normalizeState({
+      ...chromeWorkspace,
+      settings: base.settings,
+      wallpaperTheme: base.wallpaperTheme,
+      trash: base.trash,
+      privacyMode: base.privacyMode,
+    });
+  };
+
+  const applyWorkspace = async (
+    workspace: ArcalistState,
+    user: User,
+    isProUser = get().isProUser,
+  ) => {
+    const normalized = normalizeState(workspace);
+    if (get().user?.id !== user.id) return normalized;
+    set({ ...normalized, user, hydrated: true });
+    await saveState(normalized, user.id);
+    applyTheme(
+      getEffectiveTheme(
+        normalized.settings.selectedThemeId,
+        isProUser,
+        normalized.settings.customWallpapers.map(customWallpaperToTheme),
+      ),
+    );
+    return normalized;
+  };
+
+  const syncMissingCloudItemsIntoChrome = async (
+    user: User,
+    chromeWorkspace: ArcalistState,
+  ) => {
+    if (!canUseChromeBookmarks()) return chromeWorkspace;
+
+    set({ syncStatus: "syncing" });
+    try {
+      const meta = await getSyncMeta();
+      const cloudWorkspace = await pullFromCloud(user.id);
+      if (get().user?.id !== user.id) return chromeWorkspace;
+
+      const merged = await mergeCloudWorkspaceIntoChrome(
+        cloudWorkspace,
+        chromeWorkspace,
+      );
+      const nextWorkspace = normalizeState({
+        ...merged.workspace,
+        settings: chromeWorkspace.settings,
+        wallpaperTheme: chromeWorkspace.wallpaperTheme,
+        trash: chromeWorkspace.trash,
+        privacyMode: chromeWorkspace.privacyMode,
+      });
+
+      await applyWorkspace(nextWorkspace, user, true);
+      if (meta.enabled || IS_TEST_ENV) {
+        await pushToCloud(user.id, nextWorkspace, true);
+      }
+      set({ syncStatus: "synced" });
+      setTimeout(() => set({ syncStatus: "idle" }), 2000);
+      return nextWorkspace;
+    } catch (error) {
+      console.error("[Arcalist] Pro Chrome-first cloud merge failed:", error);
+      set({ syncStatus: "error" });
+      return chromeWorkspace;
+    }
+  };
+
+  const refreshChromeWorkspaceForUser = async (user: User) => {
+    const chromeWorkspace = await buildChromeFirstWorkspace(user.id);
+    if (get().user?.id !== user.id) return;
+
+    const appliedChromeWorkspace = await applyWorkspace(
+      chromeWorkspace,
+      user,
+      get().isProUser,
+    );
+
+    const plan = await resolveAuthenticatedPlanStatus(user.id);
+    if (get().user?.id !== user.id) return;
+    set({
+      isProUser: plan.isProUser,
+      planName: plan.planName,
+      entitlementReady: true,
+    });
+    await setPlanStatus(plan.isProUser, plan.planName);
+
+    if (!plan.isProUser) {
+      get().cleanupTrash();
+      return;
+    }
+
+    void syncMissingCloudItemsIntoChrome(user, appliedChromeWorkspace).then(
+      () => {
+        if (get().user?.id === user.id) get().cleanupTrash();
+      },
+    );
+  };
+
   return {
     // ─── Initial State ─────────────────────────────────────────
     pages: [],
@@ -436,116 +568,23 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       await setStoredAuthState(user.id);
       await setPlanStatus(false, "free");
 
-      const local = await loadState(user.id);
+      const cachedWorkspace = await loadState(user.id);
       if (get().user?.id !== user.id) return;
-      if (local) {
-        const normalized = normalizeState(local);
-        set({
-          ...normalized,
+
+      if (cachedWorkspace) {
+        const renderableCachedWorkspace = canUseChromeBookmarks()
+          ? canonicalizeWorkspaceAsHome(cachedWorkspace)
+          : cachedWorkspace;
+        await applyWorkspace(
+          renderableCachedWorkspace,
           user,
-          hydrated: true,
-        });
-        await saveState(normalized, user.id);
-        applyTheme(
-          getEffectiveTheme(
-            normalized.settings.selectedThemeId,
-            false,
-            normalized.settings.customWallpapers.map(customWallpaperToTheme),
-          ),
+          get().isProUser,
         );
-      } else {
-        const initial = normalizeState({
-          ...defaultState,
-          updatedAt: Date.now(),
-        });
-        set({ ...initial, user, hydrated: true });
-        await saveState(initial, user.id);
-        applyTheme(
-          getEffectiveTheme(
-            initial.settings.selectedThemeId,
-            false,
-            initial.settings.customWallpapers.map(customWallpaperToTheme),
-          ),
-        );
+        void refreshChromeWorkspaceForUser(user);
+        return;
       }
 
-      const maybeImportChrome = async () => {
-        const current = (await loadState(user.id)) ?? get();
-        const imported = await importChromeBookmarks(
-          current as ArcalistState,
-          user.id,
-        );
-        if (get().user?.id !== user.id) return;
-        if (imported) {
-          const normalized = normalizeState({
-            ...imported,
-            overflowBoards:
-              imported.overflowBoards ??
-              (current as ArcalistState).overflowBoards ??
-              [],
-          });
-          set({ ...normalized, user });
-          await saveState(normalized, user.id);
-          applyTheme(
-            getEffectiveTheme(
-              normalized.settings.selectedThemeId,
-              get().isProUser,
-              normalized.settings.customWallpapers.map(customWallpaperToTheme),
-            ),
-          );
-        }
-      };
-
-      const runBackgroundTasks = async () => {
-        if (get().isProUser) {
-          const meta = await getSyncMeta();
-          if (meta.enabled) {
-            const currentLocal = (await loadState(user.id)) ?? get();
-            const synced = await syncNow(user.id, currentLocal, get().isProUser);
-            if (get().user?.id !== user.id) return;
-            if (synced) {
-              const winner = currentLocal
-                ? resolveConflict(currentLocal, synced)
-                : synced;
-              const merged: ArcalistState = {
-                ...winner,
-                settings: { ...defaultState.settings, ...winner.settings },
-                overflowBoards: winner.overflowBoards ?? [],
-              };
-              const normalized = normalizeState(merged);
-              set({ ...normalized, user });
-              await saveState(normalized, user.id);
-            }
-          }
-        }
-
-        await maybeImportChrome();
-
-        const syncChanged = await autoSyncChromeBookmarks(
-          { ...get() } as ArcalistState,
-          user.id,
-        );
-        if (get().user?.id !== user.id) return;
-        if (syncChanged) {
-          const syncedState = await loadState(user.id);
-          if (syncedState) {
-            const normalized = normalizeState(syncedState);
-            set({ ...normalized, user });
-            await saveState(normalized, user.id);
-            applyTheme(
-              getEffectiveTheme(
-                normalized.settings.selectedThemeId,
-                get().isProUser,
-                normalized.settings.customWallpapers.map(customWallpaperToTheme),
-              ),
-            );
-          }
-        }
-
-        get().cleanupTrash();
-      };
-
-      void runBackgroundTasks();
+      await refreshChromeWorkspaceForUser(user);
     },
 
     setAuthenticatedUser: async (user) => {
@@ -893,8 +932,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       const page = get().pages.find((p) => p.id === pageId);
       const limits = getPlanLimits(get().isProUser);
       if (!limits.canCreateBoard(page?.boards?.length ?? 0)) return false;
+      const boardId = generateId();
       const newBoard: Board = {
-        id: generateId(),
+        id: boardId,
         title,
         order: page ? page.boards.length : 0,
         bookmarks: [],
@@ -905,6 +945,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         ),
       }));
       get()._persist();
+      void ensureChromeFolderForBoard(boardId, title).then(() => {
+        get()._persist();
+      });
       return true;
     },
 
@@ -962,6 +1005,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     renameBoard: (pageId, boardId, title) => {
+      const board = get().pages
+        .find((p) => p.id === pageId)
+        ?.boards.find((b) => b.id === boardId);
       set((state) => ({
         pages: state.pages.map((p) =>
           p.id === pageId
@@ -975,26 +1021,65 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         ),
       }));
       get()._persist();
+      const folderId = board?.chromeFolderId;
+      if (canUseChromeBookmarks() && folderId) {
+        chrome.bookmarks.update(folderId, { title }).catch((error) => {
+          console.error("[Arcalist] Failed to rename Chrome folder:", error);
+        });
+      } else {
+        void ensureChromeFolderForBoard(boardId, title);
+      }
     },
 
     reorderBoards: (pageId, oldIndex, newIndex) => {
+      const page = get().pages.find((p) => p.id === pageId);
+      const movedBoard = page?.boards[oldIndex];
+      const targetBoard = page?.boards[newIndex];
+      if (!page || !movedBoard || !targetBoard) return;
+      const chromeFolderId = movedBoard.chromeFolderId;
+      const chromeParentId = movedBoard.chromeParentId;
       set((state) => ({
         pages: state.pages.map((p) => {
           if (p.id !== pageId) return p;
           const boards = [...p.boards];
           const [moved] = boards.splice(oldIndex, 1);
+          if (!moved) return p;
           boards.splice(newIndex, 0, moved);
-          return { ...p, boards };
+          return {
+            ...p,
+            boards: boards.map((board, order) => ({ ...board, order })),
+          };
         }),
       }));
       get()._persist();
+      if (
+        canUseChromeBookmarks() &&
+        chromeFolderId &&
+        chromeParentId &&
+        targetBoard.chromeParentId === chromeParentId
+      ) {
+        const siblingIndex = get()
+          .pages.find((p) => p.id === pageId)
+          ?.boards.filter((board) => board.chromeParentId === chromeParentId)
+          .findIndex((board) => board.id === movedBoard.id);
+        const chromeIndex = Math.max(0, siblingIndex ?? newIndex);
+        chrome.bookmarks
+          .move(chromeFolderId, {
+            parentId: chromeParentId,
+            index: chromeIndex,
+          })
+          .catch((error) => {
+            console.error("[Arcalist] Failed to reorder Chrome folder:", error);
+          });
+      }
     },
 
     // ─── Bookmark Actions ─────────────────────────────────────
     addBookmark: (boardId, bookmark) => {
       const now = new Date().toISOString();
+      const bookmarkId = generateId();
       const newBookmark: Bookmark = {
-        id: generateId(),
+        id: bookmarkId,
         ...bookmark,
         createdAt: now,
         updatedAt: now,
@@ -1011,6 +1096,31 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         })),
       }));
       get()._persist();
+      void createChromeBookmark(boardId, newBookmark).then((chromeBookmarkId) => {
+        if (!chromeBookmarkId) return;
+        set((state) => ({
+          pages: state.pages.map((p) => ({
+            ...p,
+            boards: p.boards.map((b) =>
+              b.id === boardId
+                ? {
+                    ...b,
+                    bookmarks: b.bookmarks.map((bm) =>
+                      bm.id === bookmarkId
+                        ? {
+                            ...bm,
+                            id: `chrome-bookmark-${chromeBookmarkId}`,
+                            chromeBookmarkId,
+                          }
+                        : bm,
+                    ),
+                  }
+                : b,
+            ),
+          })),
+        }));
+        get()._persist();
+      });
     },
 
     deleteBookmark: (boardId, bookmarkId) => {
@@ -1018,6 +1128,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     },
 
     updateBookmark: (boardId, bookmarkId, updates) => {
+      const previousBookmark = findBoardById(boardId)?.bookmarks.find(
+        (bm) => bm.id === bookmarkId,
+      );
       set((state) => ({
         pages: state.pages.map((p) => ({
           ...p,
@@ -1042,6 +1155,18 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         })),
       }));
       get()._persist();
+      if (canUseChromeBookmarks() && previousBookmark?.chromeBookmarkId) {
+        const chromeUpdates: chrome.bookmarks.UpdateChanges = {};
+        if (updates.title !== undefined) chromeUpdates.title = updates.title;
+        if (updates.url !== undefined) chromeUpdates.url = updates.url;
+        if (chromeUpdates.title || chromeUpdates.url) {
+          chrome.bookmarks
+            .update(previousBookmark.chromeBookmarkId, chromeUpdates)
+            .catch((error) => {
+              console.error("[Arcalist] Failed to update Chrome bookmark:", error);
+            });
+        }
+      }
     },
 
     recordBookmarkVisit: (boardId, bookmarkId) => {
@@ -1072,6 +1197,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
 
     moveBookmark: (fromBoardId, toBoardId, bookmarkId) => {
       let bookmark: Bookmark | undefined;
+      const targetFolderId =
+        findBoardById(toBoardId)?.chromeFolderId ?? undefined;
       const pages = get().pages.map((p) => ({
         ...p,
         boards: p.boards.map((b) => {
@@ -1097,6 +1224,13 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       }));
       set({ pages: finalPages });
       get()._persist();
+      if (canUseChromeBookmarks() && bookmark.chromeBookmarkId && targetFolderId) {
+        chrome.bookmarks
+          .move(bookmark.chromeBookmarkId, { parentId: targetFolderId })
+          .catch((error) => {
+            console.error("[Arcalist] Failed to move Chrome bookmark:", error);
+          });
+      }
     },
 
     reorderBookmarks: (
@@ -1105,6 +1239,9 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
       sourceIndex,
       destinationIndex,
     ) => {
+      const sourceBoard = findBoardById(sourceBoardId);
+      const destinationBoard = findBoardById(destinationBoardId);
+      const movedBookmark = sourceBoard?.bookmarks[sourceIndex];
       set((state) => {
         let bookmark: Bookmark | undefined;
         const afterRemove = state.pages.map((p) => ({
@@ -1130,6 +1267,20 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         return { pages: afterInsert };
       });
       get()._persist();
+      if (
+        canUseChromeBookmarks() &&
+        movedBookmark?.chromeBookmarkId &&
+        destinationBoard?.chromeFolderId
+      ) {
+        chrome.bookmarks
+          .move(movedBookmark.chromeBookmarkId, {
+            parentId: destinationBoard.chromeFolderId,
+            index: destinationIndex,
+          })
+          .catch((error) => {
+            console.error("[Arcalist] Failed to reorder Chrome bookmark:", error);
+          });
+      }
     },
 
     // ─── Trash ────────────────────────────────────────────────

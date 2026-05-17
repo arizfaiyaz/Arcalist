@@ -9,6 +9,7 @@ import {
   getVisiblePagesForPlan,
   normalizeWorkspaceState,
 } from "../../src/lib/planLimits";
+import { canonicalizeWorkspaceAsHome } from "../../src/lib/chromeBookmarks";
 import type { ArcalistState, Board, Page } from "../../src/types";
 import { createBaseState } from "../utils/testState";
 
@@ -74,6 +75,38 @@ describe("plan limits", () => {
       originalBoardPageCounts,
     );
     expect(state.pages).toHaveLength(1);
+  });
+
+  it("does not keep an empty stale second page when free boards fit on Home", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 5), createPage(1, 0)],
+    });
+    const limits = getPlanLimits(false);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages).toHaveLength(1);
+    expect(workspace.visiblePages[0].title).toBe("Page 0");
+    expect(workspace.visiblePages[0].boards).toHaveLength(5);
+  });
+
+  it("creates only non-empty virtual overflow pages for free board overflow", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 11), createPage(1, 0)],
+    });
+    const limits = getPlanLimits(false);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages).toHaveLength(2);
+    expect(workspace.visiblePages.map((page) => page.boards.length)).toEqual([
+      10, 1,
+    ]);
+    expect(workspace.visiblePages[1].isVirtualOverflowPage).toBe(true);
   });
 
   it("reports hidden free boards only after all free slots are filled", () => {
@@ -148,5 +181,44 @@ describe("plan limits", () => {
     expect(normalized.pages).toHaveLength(2);
     expect(normalized.pages[1].title).toBe("Imported extras");
     expect(normalized.pages[1].boards[0].id).toBe("board-99");
+  });
+
+  it("canonicalizes cached Chrome workspaces into one Home page", () => {
+    const withBookmark = (board: Board): Board => ({
+      ...board,
+      bookmarks: [
+        {
+          id: `bookmark-${board.id}`,
+          title: board.title,
+          url: `https://example.com/${board.id}`,
+          favicon: "",
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          visitCount: 0,
+        },
+      ],
+    });
+    const state = createBaseState({
+      pages: [
+        {
+          ...createPage(0, 0),
+          boards: [withBookmark(createBoard(1)), withBookmark(createBoard(2))],
+        },
+        {
+          ...createPage(1, 0),
+          boards: [withBookmark(createBoard(3)), createBoard(4)],
+        },
+        createPage(2, 0),
+      ],
+      activePageId: "page-1",
+    });
+
+    const canonical = canonicalizeWorkspaceAsHome(state);
+
+    expect(canonical.pages).toHaveLength(1);
+    expect(canonical.pages[0].id).toBe("home");
+    expect(canonical.pages[0].title).toBe("Home");
+    expect(canonical.pages[0].boards).toHaveLength(3);
+    expect(canonical.activePageId).toBe("home");
   });
 });

@@ -48,13 +48,25 @@ export function BoardCard({
     isDragging,
   } = useSortable({
     id: board.id,
-    data: { type: "board", board },
+    data: {
+      type: "board",
+      board,
+      boardId: board.id,
+      chromeFolderId: board.chromeFolderId,
+      chromeParentId: board.chromeParentId,
+    },
   });
 
   // Also make the board a droppable zone (for receiving bookmarks)
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: `droppable-${board.id}`,
-    data: { type: "board", boardId: board.id },
+    data: {
+      type: "board",
+      board,
+      boardId: board.id,
+      chromeFolderId: board.chromeFolderId,
+      chromeParentId: board.chromeParentId,
+    },
   });
 
   // Merge both refs onto the same element
@@ -160,7 +172,12 @@ export function BoardCard({
           <button
             data-no-dnd="true"
             type="button"
-            onClick={() => deleteBoard(pageId, board.id)}
+            onClick={() => {
+              if (!window.confirm(`Delete "${board.title}" and its Chrome bookmark folder?`)) {
+                return;
+              }
+              deleteBoard(pageId, board.id);
+            }}
             aria-label={`Delete ${board.title}`}
             className="flex h-8 w-8 items-center justify-center rounded-lg text-[var(--arc-text-secondary)] hover:bg-red-400/10 hover:text-red-400"
           >
@@ -176,7 +193,7 @@ export function BoardCard({
         items={bookmarkIds}
         strategy={verticalListSortingStrategy}
       >
-        <div className={cn("flex min-h-8 flex-col", compactMode ? "gap-0.5" : "gap-1")}>
+        <div className={cn("-mx-1 flex min-h-8 flex-col", compactMode ? "gap-0.5" : "gap-1")}>
           {visibleBookmarks.map((bookmark) => (
             <BookmarkItem
               key={bookmark.id}

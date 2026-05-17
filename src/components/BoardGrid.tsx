@@ -4,7 +4,6 @@ import {
   DndContext,
   type DragStartEvent,
   type DragEndEvent,
-  type DragOverEvent,
   PointerSensor,
   KeyboardSensor,
   useSensor,
@@ -103,52 +102,6 @@ export function BoardGrid({
     }
   };
 
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const activeData = active.data.current;
-    const overData = over.data.current;
-
-    // Only handle bookmark-over-board cross-board moves here
-    if (activeData?.type !== "bookmark") return;
-
-    const sourceBoardId = activeData.boardId;
-    const destinationBoardId =
-      overData?.type === "board"
-        ? overData.boardId // dropped on board header
-        : overData?.type === "bookmark"
-          ? overData.boardId // dropped on another bookmark
-          : null;
-
-    if (!destinationBoardId || sourceBoardId === destinationBoardId) return;
-
-    // Find indices for the cross-board move
-    const sourceBoard = page.boards.find((b) => b.id === sourceBoardId);
-    const destBoard = page.boards.find((b) => b.id === destinationBoardId);
-    if (!sourceBoard || !destBoard) return;
-
-    const sourceIndex = sourceBoard.bookmarks.findIndex(
-      (bm) => bm.id === active.id,
-    );
-    const destinationIndex = destBoard.bookmarks.length; // append to end
-
-    if (sourceIndex === -1) return;
-
-    reorderBookmarks(
-      sourceBoardId,
-      destinationBoardId,
-      sourceIndex,
-      destinationIndex,
-    );
-
-    // Update the active item's boardId data so subsequent dragOver events work correctly
-    active.data.current = {
-      ...activeData,
-      boardId: destinationBoardId,
-    };
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveBookmark(null);
@@ -160,29 +113,74 @@ export function BoardGrid({
     const overData = over.data.current;
 
     // ── Board reorder ──
-    if (activeData?.type === "board" && overData?.type === "board") {
+    if (activeData?.type === "board") {
       if (disableBoardReorder) return;
-      const oldIndex = page.boards.findIndex((b) => b.id === active.id);
-      const newIndex = page.boards.findIndex((b) => b.id === over.id);
+      const activeBoardId =
+        activeData.boardId ?? activeData.board?.id ?? String(active.id);
+      const overBoardId =
+        overData?.type === "board"
+          ? overData.boardId ??
+            overData.board?.id ??
+            String(over.id).replace(/^droppable-/, "")
+          : overData?.type === "bookmark"
+            ? overData.boardId
+            : String(over.id).replace(/^droppable-/, "");
+
+      if (!overBoardId || activeBoardId === overBoardId) return;
+
+      const oldIndex = page.boards.findIndex((b) => b.id === activeBoardId);
+      const newIndex = page.boards.findIndex((b) => b.id === overBoardId);
+      if (oldIndex === -1 || newIndex === -1) return;
       if (oldIndex !== newIndex) {
         reorderBoards(page.id, oldIndex, newIndex);
       }
       return;
     }
 
-    // ── Bookmark reorder within same board ──
-    if (activeData?.type === "bookmark" && overData?.type === "bookmark") {
-      const boardId = activeData.boardId;
-      if (boardId !== overData.boardId) return; // cross-board already handled in dragOver
+    // ── Bookmark reorder / move ──
+    if (activeData?.type === "bookmark") {
+      const sourceBoardId = activeData.boardId;
+      const destinationBoardId =
+        overData?.type === "bookmark"
+          ? overData.boardId
+          : overData?.type === "board"
+            ? overData.boardId ??
+              overData.board?.id ??
+              String(over.id).replace(/^droppable-/, "")
+            : null;
 
-      const board = page.boards.find((b) => b.id === boardId);
-      if (!board) return;
+      if (!sourceBoardId || !destinationBoardId) return;
 
-      const oldIndex = board.bookmarks.findIndex((bm) => bm.id === active.id);
-      const newIndex = board.bookmarks.findIndex((bm) => bm.id === over.id);
+      const sourceBoard = page.boards.find((b) => b.id === sourceBoardId);
+      const destinationBoard = page.boards.find(
+        (b) => b.id === destinationBoardId,
+      );
+      if (!sourceBoard || !destinationBoard) return;
 
-      if (oldIndex !== newIndex) {
-        reorderBookmarks(boardId, boardId, oldIndex, newIndex);
+      const sourceIndex = sourceBoard.bookmarks.findIndex(
+        (bm) => bm.id === active.id,
+      );
+      if (sourceIndex === -1) return;
+
+      const overBookmarkIndex =
+        overData?.type === "bookmark"
+          ? destinationBoard.bookmarks.findIndex((bm) => bm.id === over.id)
+          : -1;
+      const destinationIndex =
+        overBookmarkIndex >= 0
+          ? overBookmarkIndex
+          : destinationBoard.bookmarks.length;
+
+      if (
+        sourceBoardId !== destinationBoardId ||
+        sourceIndex !== destinationIndex
+      ) {
+        reorderBookmarks(
+          sourceBoardId,
+          destinationBoardId,
+          sourceIndex,
+          destinationIndex,
+        );
       }
     }
   };
@@ -228,7 +226,6 @@ export function BoardGrid({
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
       <div
