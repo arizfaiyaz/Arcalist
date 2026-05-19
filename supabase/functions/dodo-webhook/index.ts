@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4?target=deno";
+import DodoPayments from "npm:dodopayments";
 
 type JsonObject = Record<string, unknown>;
 
@@ -57,6 +58,15 @@ function getRequiredEnv(name: string) {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`Missing ${name}`);
   return value;
+}
+
+function getDodoWebhookKey() {
+  const webhookKey =
+    Deno.env.get("DODO_WEBHOOK_SECRET") ??
+    Deno.env.get("DODO_PAYMENTS_WEBHOOK_KEY");
+
+  if (!webhookKey) throw new Error("Missing Dodo webhook secret");
+  return webhookKey;
 }
 
 function getString(value: unknown): string | null {
@@ -198,14 +208,6 @@ function getEntitlementStatus(isPro: boolean, eventStatus: string) {
   return eventStatus === "cancelled" ? "cancelled" : "inactive";
 }
 
-function getSignatureHeader(req: Request) {
-  return (
-    req.headers.get("webhook-signature") ??
-    req.headers.get("Dodo-Signature") ??
-    req.headers.get("dodo-signature")
-  );
-}
-
 function getAllowedProductIds() {
   return new Set(
     [
@@ -217,112 +219,6 @@ function getAllowedProductIds() {
 
 function isAllowedArcalistProProduct(productId: string | null) {
   return Boolean(productId && getAllowedProductIds().has(productId));
-}
-
-function validateWebhookTimestamp(webhookTimestamp: string | null) {
-  const timestamp = Number(webhookTimestamp);
-  if (!Number.isFinite(timestamp)) return "invalid" as const;
-
-  const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
-  const ageMs = Math.abs(Date.now() - timestampMs);
-  return ageMs <= 5 * 60 * 1000 ? "valid" as const : "stale" as const;
-}
-
-function extractSignatureCandidates(header: string) {
-  return header
-    .split(/[\s,;]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const equalsIndex = part.indexOf("=");
-      return equalsIndex >= 0 ? part.slice(equalsIndex + 1) : part;
-    })
-    .filter((part) => part && part !== "v1");
-}
-
-function timingSafeEqual(a: string, b: string) {
-  const left = new TextEncoder().encode(a);
-  const right = new TextEncoder().encode(b);
-  if (left.length !== right.length) return false;
-
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    diff |= left[index] ^ right[index];
-  }
-  return diff === 0;
-}
-
-function bytesToHex(bytes: ArrayBuffer) {
-  return Array.from(new Uint8Array(bytes), (byte) =>
-    byte.toString(16).padStart(2, "0"),
-  ).join("");
-}
-
-function bytesToBase64(bytes: ArrayBuffer) {
-  let binary = "";
-  for (const byte of new Uint8Array(bytes)) {
-    binary += String.fromCharCode(byte);
-  }
-  return btoa(binary);
-}
-
-function bytesToBase64Url(bytes: ArrayBuffer) {
-  return bytesToBase64(bytes)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function secretToBytes(secret: string) {
-  if (secret.startsWith("whsec_")) {
-    const normalized = secret
-      .slice("whsec_".length)
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      "=",
-    );
-    const binary = atob(padded);
-    return Uint8Array.from(binary, (char) => char.charCodeAt(0));
-  }
-  return new TextEncoder().encode(secret);
-}
-
-async function verifyWebhookSignature({
-  rawBody,
-  webhookId,
-  timestamp,
-  signatureHeader,
-  secret,
-}: {
-  rawBody: string;
-  webhookId: string;
-  timestamp: string;
-  signatureHeader: string;
-  secret: string;
-}) {
-  if (!webhookId || !timestamp || !signatureHeader) return false;
-
-  const signedPayload = `${webhookId}.${timestamp}.${rawBody}`;
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    secretToBytes(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const digest = await crypto.subtle.sign(
-    "HMAC",
-    cryptoKey,
-    new TextEncoder().encode(signedPayload),
-  );
-
-  const expected = [bytesToBase64(digest), bytesToBase64Url(digest), bytesToHex(digest)];
-  const candidates = extractSignatureCandidates(signatureHeader);
-  return candidates.some((candidate) =>
-    expected.some((value) => timingSafeEqual(candidate, value)),
-  );
 }
 
 function createAdminClient() {
@@ -571,8 +467,9 @@ async function processEvent({
     console.info("[Arcalist] Ignored Dodo webhook event", {
       event_id: eventId ?? undefined,
       event_type: eventType,
+      reason: "unknown_or_test_event",
     });
-    return "ignored";
+    return "ignored_unknown_or_test_event";
   }
 
   const productId = extractProductId(data);
@@ -580,6 +477,7 @@ async function processEvent({
     console.warn("Ignoring webhook for non-Arcalist-Pro product", {
       eventType,
       productId,
+      reason: "unknown_product",
     });
     return "ignored_unknown_product";
   }
@@ -597,8 +495,9 @@ async function processEvent({
       event_id: eventId ?? undefined,
       event_type: eventType,
       has_email: Boolean(email),
+      reason: "unmatched_user",
     });
-    return "unmatched";
+    return "ignored_unmatched_user";
   }
 
   if (userLookup?.source === "email") {
@@ -644,8 +543,9 @@ async function processEvent({
     console.warn("[Arcalist] Dodo subscription webhook missing subscription id", {
       event_id: eventId ?? undefined,
       event_type: eventType,
+      reason: "unknown_or_test_event",
     });
-    return "ignored";
+    return "ignored_unknown_or_test_event";
   }
 
   if (!shouldGrantPro) {
@@ -694,61 +594,67 @@ Deno.serve(async (req: Request) => {
   }
 
   const rawBody = await req.text();
-  const webhookId = req.headers.get("webhook-id");
-  const timestamp = req.headers.get("webhook-timestamp");
-  const signatureHeader = getSignatureHeader(req);
+  const webhookHeaders = {
+    "webhook-id": req.headers.get("webhook-id") ?? "",
+    "webhook-signature": req.headers.get("webhook-signature") ?? "",
+    "webhook-timestamp": req.headers.get("webhook-timestamp") ?? "",
+  };
 
   console.info("[Arcalist] Dodo webhook received", {
-    webhook_id: webhookId ?? undefined,
-    has_signature: Boolean(signatureHeader),
+    method: req.method,
+    hasWebhookId: Boolean(webhookHeaders["webhook-id"]),
+    hasWebhookSignature: Boolean(webhookHeaders["webhook-signature"]),
+    hasWebhookTimestamp: Boolean(webhookHeaders["webhook-timestamp"]),
+    rawBodyLength: rawBody.length,
   });
 
-  const timestampStatus = validateWebhookTimestamp(timestamp);
-  if (timestampStatus === "invalid") {
-    return json({ error: "Invalid webhook timestamp" }, 401);
-  }
-  if (timestampStatus === "stale") {
-    return json({ error: "Webhook timestamp too old" }, 401);
-  }
-
-  let verified = false;
-  try {
-    verified = await verifyWebhookSignature({
-      rawBody,
-      webhookId: webhookId ?? "",
-      timestamp: timestamp ?? "",
-      signatureHeader: signatureHeader ?? "",
-      secret: getRequiredEnv("DODO_WEBHOOK_SECRET"),
+  if (
+    !webhookHeaders["webhook-id"] ||
+    !webhookHeaders["webhook-signature"] ||
+    !webhookHeaders["webhook-timestamp"]
+  ) {
+    console.warn("[Arcalist] Dodo webhook missing signature headers", {
+      method: req.method,
+      hasWebhookId: Boolean(webhookHeaders["webhook-id"]),
+      hasWebhookSignature: Boolean(webhookHeaders["webhook-signature"]),
+      hasWebhookTimestamp: Boolean(webhookHeaders["webhook-timestamp"]),
+      responseStatusPath: "missing_signature_headers_401",
     });
-  } catch (error) {
-    console.error("[Arcalist] Dodo webhook verification failed", {
-      webhook_id: webhookId ?? undefined,
-      message: error instanceof Error ? error.message : String(error),
-    });
-  }
-
-  if (!verified) {
-    return json({ error: "Invalid signature" }, 401);
+    return json({ error: "Missing webhook signature headers" }, 401);
   }
 
   let event: DodoEvent;
   try {
-    event = JSON.parse(rawBody) as DodoEvent;
-  } catch {
-    return json({ error: "Invalid JSON" }, 400);
-  }
-
-  const eventType = getEventType(event);
-  if (!eventType) {
-    console.info("[Arcalist] Dodo webhook missing event type, ignored", {
-      webhook_id: webhookId ?? undefined,
+    const client = new DodoPayments({
+      bearerToken: getRequiredEnv("DODO_PAYMENTS_API_KEY"),
+      environment: Deno.env.get("DODO_PAYMENTS_ENVIRONMENT") || "live_mode",
+      webhookKey: getDodoWebhookKey(),
     });
-    return json({ received: true, ignored: true });
+
+    event = client.webhooks.unwrap(rawBody, {
+      headers: webhookHeaders,
+    }) as DodoEvent;
+  } catch (error) {
+    console.error("[Arcalist] Dodo webhook verification failed", {
+      webhook_id: webhookHeaders["webhook-id"] || undefined,
+      message: error instanceof Error ? error.message : String(error),
+      responseStatusPath: "invalid_signature_401",
+    });
+    return json({ error: "Invalid signature" }, 401);
   }
 
-  const eventId = getEventId(event, webhookId);
+  const eventType = getEventType(event) ?? "unknown";
+  const eventId = getEventId(event, webhookHeaders["webhook-id"]);
   if (!eventId) {
-    return json({ error: "Missing webhook event id" }, 400);
+    console.warn("[Arcalist] Dodo webhook missing event id after unwrap", {
+      event_type: eventType,
+      responseStatusPath: "unknown_or_test_event_200",
+    });
+    return json({
+      ok: true,
+      ignored: true,
+      reason: "unknown_or_test_event",
+    });
   }
 
   const data = getPayloadData(event);
@@ -757,6 +663,7 @@ Deno.serve(async (req: Request) => {
   console.info("[Arcalist] Dodo webhook parsed", {
     event_id: eventId ?? undefined,
     event_type: eventType,
+    responseStatusPath: "signature_verified",
   });
 
   try {
@@ -767,6 +674,11 @@ Deno.serve(async (req: Request) => {
       event,
     });
     if (reservation === "duplicate") {
+      console.info("[Arcalist] Dodo webhook duplicate ignored", {
+        event_id: eventId,
+        event_type: eventType,
+        responseStatusPath: "duplicate_200",
+      });
       return json({ ok: true, duplicate: true });
     }
 
@@ -785,6 +697,12 @@ Deno.serve(async (req: Request) => {
     });
 
     if (status === "ignored_unknown_product") {
+      console.info("[Arcalist] Dodo webhook ignored", {
+        event_id: eventId,
+        event_type: eventType,
+        reason: "unknown_product",
+        responseStatusPath: "ignored_unknown_product_200",
+      });
       return json({
         ok: true,
         ignored: true,
@@ -792,6 +710,40 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    if (status === "ignored_unknown_or_test_event") {
+      console.info("[Arcalist] Dodo webhook ignored", {
+        event_id: eventId,
+        event_type: eventType,
+        reason: "unknown_or_test_event",
+        responseStatusPath: "ignored_unknown_or_test_event_200",
+      });
+      return json({
+        ok: true,
+        ignored: true,
+        reason: "unknown_or_test_event",
+      });
+    }
+
+    if (status === "ignored_unmatched_user") {
+      console.info("[Arcalist] Dodo webhook ignored", {
+        event_id: eventId,
+        event_type: eventType,
+        reason: "unmatched_user",
+        responseStatusPath: "ignored_unmatched_user_200",
+      });
+      return json({
+        ok: true,
+        ignored: true,
+        reason: "unmatched_user",
+      });
+    }
+
+    console.info("[Arcalist] Dodo webhook completed", {
+      event_id: eventId,
+      event_type: eventType,
+      status,
+      responseStatusPath: "processed_200",
+    });
     return json({ received: true, status });
   } catch (error) {
     await markWebhookEventStatus({
@@ -803,6 +755,7 @@ Deno.serve(async (req: Request) => {
       event_id: eventId ?? undefined,
       event_type: eventType,
       message: error instanceof Error ? error.message : String(error),
+      responseStatusPath: "processing_failed_500",
     });
     return json({ error: "Webhook processing failed" }, 500);
   }
