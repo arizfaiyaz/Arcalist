@@ -17,6 +17,8 @@ $$;
 revoke all on function public.is_active_pro(uuid) from public;
 grant execute on function public.is_active_pro(uuid) to authenticated;
 
+drop function if exists public.get_shared_page_by_token(text);
+
 create or replace function public.get_shared_page_by_token(p_token text)
 returns table (
   title text,
