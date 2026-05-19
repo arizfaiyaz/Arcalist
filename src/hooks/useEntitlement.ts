@@ -10,6 +10,7 @@ import { supabase } from "../lib/supabase";
 import {
   getCurrentUserEntitlement,
   isProEntitlement,
+  type PlanSource,
   type UserEntitlement,
 } from "../lib/entitlements";
 import type { PlanName } from "../lib/planLimits";
@@ -19,6 +20,7 @@ export type EntitlementHookState = {
   loading: boolean;
   isPro: boolean;
   plan: PlanName;
+  planSource: PlanSource;
   refreshEntitlement: () => Promise<UserEntitlement | null>;
 };
 
@@ -35,19 +37,34 @@ export function useEntitlementContext() {
 export function useEntitlement(): EntitlementHookState {
   const [entitlement, setEntitlement] = useState<UserEntitlement | null>(null);
   const [loading, setLoading] = useState(true);
+  const devOverride =
+    import.meta.env.DEV && import.meta.env.VITE_ENABLE_DEV_PRO === "true";
 
   const refreshEntitlement = useCallback(async () => {
+    if (devOverride) {
+      setEntitlement(null);
+      setLoading(false);
+      return null;
+    }
+
     setLoading(true);
     const nextEntitlement = await getCurrentUserEntitlement();
     setEntitlement(nextEntitlement);
     setLoading(false);
     return nextEntitlement;
-  }, []);
+  }, [devOverride]);
 
   useEffect(() => {
     let active = true;
 
     const refresh = async () => {
+      if (devOverride) {
+        if (!active) return;
+        setEntitlement(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       const nextEntitlement = await getCurrentUserEntitlement();
       if (!active) return;
@@ -67,10 +84,30 @@ export function useEntitlement(): EntitlementHookState {
       active = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [devOverride]);
 
-  const isPro = isProEntitlement(entitlement);
+  useEffect(() => {
+    const refreshOnFocus = () => {
+      if (document.visibilityState === "visible") {
+        void refreshEntitlement();
+      }
+    };
+
+    window.addEventListener("focus", refreshOnFocus);
+    document.addEventListener("visibilitychange", refreshOnFocus);
+    return () => {
+      window.removeEventListener("focus", refreshOnFocus);
+      document.removeEventListener("visibilitychange", refreshOnFocus);
+    };
+  }, [refreshEntitlement]);
+
+  const isPro = devOverride || isProEntitlement(entitlement);
   const plan: PlanName = isPro ? "pro" : "free";
+  const planSource: PlanSource = devOverride
+    ? "dev_override"
+    : isPro
+      ? "dodo_subscription"
+      : "default_free";
 
   return useMemo(
     () => ({
@@ -78,8 +115,9 @@ export function useEntitlement(): EntitlementHookState {
       loading,
       isPro,
       plan,
+      planSource,
       refreshEntitlement,
     }),
-    [entitlement, isPro, loading, plan, refreshEntitlement],
+    [entitlement, isPro, loading, plan, planSource, refreshEntitlement],
   );
 }

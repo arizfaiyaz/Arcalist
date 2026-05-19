@@ -2,7 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseState = vi.hoisted(() => ({
   user: null as { id: string } | null,
-  row: null as { plan: string; status: string; source: string | null } | null,
+  row: null as {
+    plan: string;
+    is_pro: boolean;
+    valid_until: string | null;
+    status: string;
+    source: string | null;
+  } | null,
   error: null as { message: string } | null,
 }));
 
@@ -64,7 +70,13 @@ describe("entitlements", () => {
 
   it("treats pro active entitlement as pro", async () => {
     supabaseState.user = { id: "user-1" };
-    supabaseState.row = { plan: "pro", status: "active", source: "manual" };
+    supabaseState.row = {
+      plan: "pro",
+      is_pro: true,
+      valid_until: null,
+      status: "active",
+      source: "dodo_subscription",
+    };
     const { getCurrentUserEntitlement, isProEntitlement } = await import(
       "../../src/lib/entitlements"
     );
@@ -75,7 +87,26 @@ describe("entitlements", () => {
   });
 
   it("treats inactive pro entitlement as free", async () => {
-    supabaseState.row = { plan: "pro", status: "cancelled", source: "manual" };
+    supabaseState.row = {
+      plan: "pro",
+      is_pro: false,
+      valid_until: null,
+      status: "cancelled",
+      source: "dodo_subscription",
+    };
+    const { isProEntitlement } = await import("../../src/lib/entitlements");
+
+    expect(isProEntitlement(supabaseState.row)).toBe(false);
+  });
+
+  it("treats expired pro entitlement as free", async () => {
+    supabaseState.row = {
+      plan: "pro",
+      is_pro: true,
+      valid_until: "2020-01-01T00:00:00Z",
+      status: "active",
+      source: "dodo_subscription",
+    };
     const { isProEntitlement } = await import("../../src/lib/entitlements");
 
     expect(isProEntitlement(supabaseState.row)).toBe(false);

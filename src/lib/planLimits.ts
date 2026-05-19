@@ -1,5 +1,6 @@
 import { generateId } from "./id";
 import type { ArcalistState, Board, Page } from "../types";
+import type { PlanSource, UserEntitlement } from "./entitlements";
 
 export type PlanName = "free" | "pro";
 
@@ -52,6 +53,8 @@ export type UserPlanLimits = {
   maxPages: number;
   maxBoardsPerPage: number;
   loading?: boolean;
+  planSource?: PlanSource;
+  refreshPlan?: () => Promise<UserEntitlement | null>;
   canCreatePage: (currentPageCount: number) => boolean;
   canCreateBoard: (currentBoardCountForPage: number) => boolean;
 };
