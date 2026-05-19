@@ -395,8 +395,8 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
     const base: ArcalistState = {
       ...defaultState,
       ...(local ?? {}),
-      pages: [],
-      activePageId: HOME_PAGE_ID,
+      pages: local?.pages ?? [],
+      activePageId: local?.activePageId ?? HOME_PAGE_ID,
       overflowBoards: [],
       updatedAt: Date.now(),
       settings: {
@@ -912,6 +912,10 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         title,
         order: get().pages.length,
         boards: [],
+        source: "user_created",
+        createdByUser: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
       set((state) => ({ pages: [...state.pages, newPage] }));
       get()._persist();
@@ -961,6 +965,10 @@ export const useArcalistStore = create<ArcalistStore>((set, get) => {
         title,
         order: page ? page.boards.length : 0,
         bookmarks: [],
+        source: "user_created",
+        createdByUser: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
       set((state) => ({
         pages: state.pages.map((p) =>

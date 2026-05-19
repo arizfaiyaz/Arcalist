@@ -33,6 +33,33 @@ const byIndex = <T extends { index?: number }>(items: T[]) =>
 const byOrder = <T extends { order?: number }>(items: T[]) =>
   [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
+const isUserCreatedPage = (page: Page) =>
+  page.createdByUser === true || page.source === "user_created";
+
+const isVirtualPage = (page: Page) => page.source === "virtual_overflow";
+
+const isUserCreatedBoard = (board: Board) =>
+  board.createdByUser === true || board.source === "user_created";
+
+function cloneBoard(board: Board, order = board.order): Board {
+  return {
+    ...board,
+    order,
+    bookmarks: [...(board.bookmarks ?? [])],
+  };
+}
+
+function preservedUserPages(base?: Partial<ArcalistState>): Page[] {
+  return byOrder(base?.pages ?? [])
+    .filter((page) => isUserCreatedPage(page) && !isVirtualPage(page))
+    .map((page) => ({
+      ...page,
+      source: "user_created",
+      createdByUser: true,
+      boards: byOrder(page.boards ?? []).map((board) => cloneBoard(board)),
+    }));
+}
+
 export async function fetchChromeBookmarkTree() {
   return chrome.bookmarks.getTree();
 }
@@ -161,6 +188,7 @@ export function flattenChromeFoldersToBoards(
       chromeFolderId: node.id,
       chromeParentId: node.parentId,
       chromeIndex: node.index,
+      source: "chrome_folder",
       title: boardTitleForPath(titlePath),
       order,
       bookmarks,
@@ -212,9 +240,41 @@ export function buildHomeWorkspaceFromChromeBookmarks(
   tree: chrome.bookmarks.BookmarkTreeNode[],
   base?: Partial<ArcalistState>,
 ): ArcalistState {
+  const userPages = preservedUserPages(base);
+  const userBoardByChromeFolderId = new Map<string, Board>();
+  for (const page of userPages) {
+    for (const board of page.boards ?? []) {
+      if (board.chromeFolderId) userBoardByChromeFolderId.set(board.chromeFolderId, board);
+    }
+  }
+  const chromeBoards = flattenChromeFoldersToBoards(tree).filter(
+    (board) => (board.bookmarks ?? []).length > 0,
+  );
+  const refreshedUserPages = userPages.map((page) => ({
+    ...page,
+    boards: byOrder(page.boards ?? []).map((board) => {
+      const chromeBoard = board.chromeFolderId
+        ? chromeBoards.find(
+            (candidate) => candidate.chromeFolderId === board.chromeFolderId,
+          )
+        : undefined;
+      return chromeBoard
+        ? {
+            ...board,
+            ...chromeBoard,
+            id: board.id,
+            source: "user_created" as const,
+            createdByUser: true,
+            order: board.order,
+          }
+        : board;
+    }),
+  }));
   const boards = applyCachedBoardOrder(
-    flattenChromeFoldersToBoards(tree).filter(
-      (board) => (board.bookmarks ?? []).length > 0,
+    chromeBoards.filter(
+      (board) =>
+        !board.chromeFolderId ||
+        !userBoardByChromeFolderId.has(board.chromeFolderId),
     ),
     base,
   );
@@ -222,13 +282,23 @@ export function buildHomeWorkspaceFromChromeBookmarks(
   const homePage: Page = {
     id: HOME_PAGE_ID,
     title: HOME_PAGE_TITLE,
+    source: "chrome_home",
     order: 0,
     boards,
   };
+  const orderedUserPages = refreshedUserPages.map((page, index) => ({
+    ...page,
+    order: index + 1,
+  }));
+  const activePageId =
+    base?.activePageId &&
+    [homePage, ...orderedUserPages].some((page) => page.id === base.activePageId)
+      ? base.activePageId
+      : HOME_PAGE_ID;
 
   return {
-    pages: [homePage],
-    activePageId: HOME_PAGE_ID,
+    pages: [homePage, ...orderedUserPages],
+    activePageId,
     trash: base?.trash ?? [],
     overflowBoards: [],
     privacyMode: base?.privacyMode ?? false,
@@ -241,26 +311,39 @@ export function buildHomeWorkspaceFromChromeBookmarks(
 export function canonicalizeToHomeWorkspace(
   workspace: ArcalistState,
 ): ArcalistState {
+  const userPages = preservedUserPages(workspace);
   const boards = byOrder(workspace.pages ?? [])
+    .filter((page) => !isUserCreatedPage(page) && !isVirtualPage(page))
     .flatMap((page) => byOrder(page.boards ?? []))
-    .filter((board) => (board.bookmarks ?? []).length > 0)
+    .filter(
+      (board) => (board.bookmarks ?? []).length > 0 || isUserCreatedBoard(board),
+    )
     .map((board, order) => ({
       ...board,
       order,
       bookmarks: [...(board.bookmarks ?? [])],
     }));
+  const pages: Page[] = [
+    {
+      id: HOME_PAGE_ID,
+      title: HOME_PAGE_TITLE,
+      source: "chrome_home",
+      order: 0,
+      boards,
+    },
+    ...userPages.map((page, index) => ({
+      ...page,
+      order: index + 1,
+    })),
+  ];
+  const activePageId = pages.some((page) => page.id === workspace.activePageId)
+    ? workspace.activePageId
+    : HOME_PAGE_ID;
 
   return {
     ...workspace,
-    pages: [
-      {
-        id: HOME_PAGE_ID,
-        title: HOME_PAGE_TITLE,
-        order: 0,
-        boards,
-      },
-    ],
-    activePageId: HOME_PAGE_ID,
+    pages,
+    activePageId,
     overflowBoards: [],
   };
 }

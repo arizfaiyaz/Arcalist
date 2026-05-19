@@ -29,6 +29,12 @@ const createPage = (index: number, boardCount = 0): Page => ({
   ),
 });
 
+const createUserPage = (index: number, boardCount = 0): Page => ({
+  ...createPage(index, boardCount),
+  source: "user_created",
+  createdByUser: true,
+});
+
 describe("plan limits", () => {
   it("limits free users to three visible pages and ten visible boards", () => {
     const state = createBaseState({
@@ -90,6 +96,47 @@ describe("plan limits", () => {
     expect(workspace.visiblePages).toHaveLength(1);
     expect(workspace.visiblePages[0].title).toBe("Page 0");
     expect(workspace.visiblePages[0].boards).toHaveLength(5);
+  });
+
+  it("keeps empty user-created pages visible for free users", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 5), createUserPage(1, 0), createUserPage(2, 0)],
+    });
+    const limits = getPlanLimits(false);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages).toHaveLength(3);
+    expect(workspace.visiblePages.map((page) => page.id)).toEqual([
+      "page-0",
+      "page-1",
+      "page-2",
+    ]);
+    expect(workspace.visiblePages[1].boards).toEqual([]);
+    expect(workspace.visiblePages[2].boards).toEqual([]);
+  });
+
+  it("prioritizes real user-created pages over virtual overflow pages", () => {
+    const state = createBaseState({
+      pages: [createPage(0, 25), createUserPage(1, 0), createUserPage(2, 0)],
+    });
+    const limits = getPlanLimits(false);
+    const workspace = getVisibleWorkspaceForPlan({
+      pages: state.pages,
+      limits,
+    });
+
+    expect(workspace.visiblePages.map((page) => page.id)).toEqual([
+      "page-0",
+      "page-1",
+      "page-2",
+    ]);
+    expect(workspace.visiblePages.some((page) => page.isVirtualOverflowPage)).toBe(
+      false,
+    );
+    expect(workspace.hiddenBoardCount).toBe(15);
   });
 
   it("creates only non-empty virtual overflow pages for free board overflow", () => {
@@ -220,5 +267,32 @@ describe("plan limits", () => {
     expect(canonical.pages[0].title).toBe("Home");
     expect(canonical.pages[0].boards).toHaveLength(3);
     expect(canonical.activePageId).toBe("home");
+  });
+
+  it("preserves empty user-created pages during canonicalization", () => {
+    const state = createBaseState({
+      pages: [
+        {
+          ...createPage(0, 1),
+          id: "home",
+          title: "Home",
+          source: "chrome_home",
+        },
+        createUserPage(1, 0),
+      ],
+      activePageId: "page-1",
+    });
+
+    const canonical = canonicalizeWorkspaceAsHome(state);
+
+    expect(canonical.pages).toHaveLength(2);
+    expect(canonical.pages[0].id).toBe("home");
+    expect(canonical.pages[1]).toMatchObject({
+      id: "page-1",
+      source: "user_created",
+      createdByUser: true,
+      boards: [],
+    });
+    expect(canonical.activePageId).toBe("page-1");
   });
 });

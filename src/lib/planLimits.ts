@@ -97,6 +97,14 @@ const byOrder = <T extends { order: number }>(items: T[]) =>
     .sort((a, b) => a.item.order - b.item.order || a.index - b.index)
     .map(({ item }) => item);
 
+const isUserCreatedPage = (page: Page) =>
+  page.createdByUser === true || page.source === "user_created";
+
+const isVirtualPage = (page: Page) => page.source === "virtual_overflow";
+
+const isRenderableRealPage = (page: Page, index: number) =>
+  index === 0 || isUserCreatedPage(page) || (page.boards ?? []).length > 0;
+
 export const getVisibleBoardsForPlan = (
   boards: Board[],
   limits: UserPlanLimits,
@@ -140,26 +148,25 @@ export const getVisibleWorkspaceForPlan = ({
   maxPages?: number;
   maxBoardsPerPage?: number;
 }): PlanVisibilityResult => {
-  const orderedPages = byOrder(pages ?? []);
-  const sourceHomePage = orderedPages[0] ?? {
+  const orderedPages = byOrder(pages ?? []).filter((page) => !isVirtualPage(page));
+  const realPages = orderedPages.filter(isRenderableRealPage);
+  const sourceHomePage = realPages[0] ?? orderedPages[0] ?? {
     id: "home",
     title: "Home",
+    source: "chrome_home" as const,
     order: 0,
     boards: [],
   };
-  const orderedBoards = orderedPages.flatMap((page) =>
-    byOrder(page.boards ?? []).map((board) => ({
-      ...board,
-      originalPageId: page.id,
-    })),
-  );
 
   if (limits.loading) {
     return {
       visiblePages: [
         {
           ...sourceHomePage,
-          boards: orderedBoards,
+          boards: byOrder(sourceHomePage.boards ?? []).map((board) => ({
+            ...board,
+            originalPageId: sourceHomePage.id,
+          })),
           originalPageId: sourceHomePage.id,
         },
       ],
@@ -171,8 +178,8 @@ export const getVisibleWorkspaceForPlan = ({
   }
 
   if (isProUser) {
-    const visiblePages: PlanVisiblePage[] = (orderedPages.length > 0
-      ? orderedPages
+    const visiblePages: PlanVisiblePage[] = (realPages.length > 0
+      ? realPages
       : [sourceHomePage]
     ).map((page) => ({
       ...page,
@@ -195,53 +202,67 @@ export const getVisibleWorkspaceForPlan = ({
   const visibleBoardLimit = Number.isFinite(maxBoardsPerPage)
     ? maxBoardsPerPage
     : Infinity;
-  const totalVisibleBoardSlots =
-    visiblePageLimit === Infinity || visibleBoardLimit === Infinity
-      ? Infinity
-      : visiblePageLimit * visibleBoardLimit;
-  const visibleBoards = orderedBoards.slice(0, totalVisibleBoardSlots);
-  const neededPageCount = Math.min(
-    visiblePageLimit,
-    Math.max(1, Math.ceil(visibleBoards.length / visibleBoardLimit)),
+  const visibleRealPages = realPages.slice(0, visiblePageLimit);
+  const hiddenRealPages = realPages.slice(visiblePageLimit);
+  const visiblePages: PlanVisiblePage[] = visibleRealPages.map((page) => ({
+    ...page,
+    boards: byOrder(page.boards ?? [])
+      .slice(0, visibleBoardLimit)
+      .map((board) => ({
+        ...board,
+        originalPageId: page.id,
+      })),
+    originalPageId: page.id,
+  }));
+  const overflowBoards = visibleRealPages.flatMap((page) =>
+    byOrder(page.boards ?? [])
+      .slice(visibleBoardLimit)
+      .map((board) => ({
+        ...board,
+        originalPageId: page.id,
+      })),
+  );
+  const availableVirtualPageSlots = Math.max(
+    0,
+    visiblePageLimit - visiblePages.length,
   );
 
-  const visiblePages: PlanVisiblePage[] = Array.from(
-    { length: neededPageCount },
-    (_, index) => {
-      const boards =
-        visibleBoardLimit === Infinity
-          ? visibleBoards
-          : visibleBoards.slice(
-              index * visibleBoardLimit,
-              (index + 1) * visibleBoardLimit,
-            );
+  for (let index = 0; index < availableVirtualPageSlots; index += 1) {
+    const boards = overflowBoards.slice(
+      index * visibleBoardLimit,
+      (index + 1) * visibleBoardLimit,
+    );
+    if (boards.length === 0) break;
+    visiblePages.push({
+      id: `virtual-free-overflow-page-${index + 1}`,
+      title: `Overflow ${index + 1}`,
+      source: "virtual_overflow",
+      order: visiblePages.length,
+      boards,
+      originalPageId: "",
+      isVirtualOverflowPage: true,
+    });
+  }
 
-      if (index === 0) {
-        return {
-          ...sourceHomePage,
-          boards,
-          originalPageId: sourceHomePage.id,
-        };
-      }
+  if (visiblePages.length === 0) {
+    visiblePages.push({
+      ...sourceHomePage,
+      boards: [],
+      originalPageId: sourceHomePage.id,
+    });
+  }
 
-      return {
-        id: `virtual-free-overflow-page-${index + 1}`,
-        title: `Page ${index + 1}`,
-        order: index,
-        boards,
-        originalPageId: "",
-        isVirtualOverflowPage: true,
-      };
-    },
-  );
+  const hiddenBoardCount =
+    overflowBoards.length -
+    Math.min(overflowBoards.length, availableVirtualPageSlots * visibleBoardLimit) +
+    hiddenRealPages.reduce((count, page) => count + (page.boards?.length ?? 0), 0);
+  const hiddenPageCount = Math.max(0, realPages.length - visiblePageLimit);
 
   return {
     visiblePages,
-    hiddenBoardCount: Math.max(0, orderedBoards.length - totalVisibleBoardSlots),
-    hiddenPageCount: Math.max(0, orderedPages.length - visiblePageLimit),
-    hasHiddenData:
-      orderedBoards.length > totalVisibleBoardSlots ||
-      orderedPages.length > visiblePageLimit,
+    hiddenBoardCount,
+    hiddenPageCount,
+    hasHiddenData: hiddenBoardCount > 0 || hiddenPageCount > 0,
   };
 };
 
@@ -274,6 +295,8 @@ export const normalizeWorkspaceState = (state: ArcalistState): ArcalistState => 
         title: item.fromPageTitle ?? `Recovered Page ${pages.length + 1}`,
         order: pages.length,
         boards: [],
+        source: "user_created",
+        createdByUser: true,
       };
       pages.push(targetPage);
     }
@@ -287,8 +310,9 @@ export const normalizeWorkspaceState = (state: ArcalistState): ArcalistState => 
 
   if (pages.length === 0) {
     pages.push({
-      id: generateId(),
+      id: "home",
       title: "Home",
+      source: "chrome_home",
       order: 0,
       boards: [],
     });
@@ -296,6 +320,7 @@ export const normalizeWorkspaceState = (state: ArcalistState): ArcalistState => 
 
   pages.forEach((page, pageIndex) => {
     page.order = Number.isFinite(page.order) ? page.order : pageIndex;
+    if (page.id === "home" && !page.source) page.source = "chrome_home";
     page.boards.forEach((board, boardIndex) => {
       board.order = Number.isFinite(board.order) ? board.order : boardIndex;
       board.bookmarks = board.bookmarks ?? [];

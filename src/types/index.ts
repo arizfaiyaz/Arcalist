@@ -21,6 +21,9 @@ export type Board = {
   title: string
   bookmarks: Bookmark[]
   order: number
+  source?: "chrome_folder" | "user_created"
+  createdByUser?: boolean
+  createdAt?: number | string
   chromeFolderId?: string
   chromeParentId?: string
   chromeIndex?: number
@@ -33,6 +36,9 @@ export type Page = {
   title: string
   boards: Board[]
   order: number
+  source?: "chrome_home" | "user_created" | "virtual_overflow"
+  createdByUser?: boolean
+  createdAt?: number | string
   updatedAt?: number | string
   deletedAt?: string
 }
