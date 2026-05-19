@@ -12,11 +12,10 @@ export type BillingPlan = {
 
 export type Entitlement = {
   plan: "free" | "pro" | string | null;
-  is_pro: boolean | null;
-  source: "dev_override" | "dodo_subscription" | "default_free" | string | null;
-  dodo_subscription_id?: string | null;
-  valid_until: string | null;
-  status?: string | null;
+  status: "active" | "inactive" | "cancelled" | string | null;
+  source: "dodo" | "internal" | "manual" | string | null;
+  reason?: string | null;
+  updated_at?: string | null;
 };
 
 export type CheckoutResponse = {

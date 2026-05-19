@@ -106,7 +106,7 @@ export function useEntitlement(): EntitlementHookState {
   const planSource: PlanSource = devOverride
     ? "dev_override"
     : isPro
-      ? "dodo_subscription"
+      ? (entitlement?.source ?? "manual")
       : "default_free";
 
   return useMemo(

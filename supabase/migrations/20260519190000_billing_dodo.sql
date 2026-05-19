@@ -31,14 +31,25 @@ on public.subscriptions (user_id);
 create index if not exists subscriptions_dodo_customer_id_idx
 on public.subscriptions (dodo_customer_id);
 
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'subscription_plan') then
+    create type public.subscription_plan as enum ('free', 'pro');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'subscription_status') then
+    create type public.subscription_status as enum ('active', 'inactive', 'cancelled');
+  end if;
+  if not exists (select 1 from pg_type where typname = 'subscription_source') then
+    create type public.subscription_source as enum ('dodo', 'internal', 'manual');
+  end if;
+end $$;
+
 create table if not exists public.user_entitlements (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  plan text not null default 'free' check (plan in ('free', 'pro')),
-  is_pro boolean not null default false,
-  source text not null default 'default_free',
-  dodo_subscription_id text,
-  valid_until timestamptz,
-  status text not null default 'free',
+  plan public.subscription_plan not null default 'free',
+  status public.subscription_status not null default 'inactive',
+  source public.subscription_source not null default 'internal',
+  reason text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

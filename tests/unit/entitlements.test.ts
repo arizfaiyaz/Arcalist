@@ -4,10 +4,10 @@ const supabaseState = vi.hoisted(() => ({
   user: null as { id: string } | null,
   row: null as {
     plan: string;
-    is_pro: boolean;
-    valid_until: string | null;
     status: string;
     source: string | null;
+    reason?: string | null;
+    updated_at?: string | null;
   } | null,
   error: null as { message: string } | null,
 }));
@@ -72,10 +72,8 @@ describe("entitlements", () => {
     supabaseState.user = { id: "user-1" };
     supabaseState.row = {
       plan: "pro",
-      is_pro: true,
-      valid_until: null,
       status: "active",
-      source: "dodo_subscription",
+      source: "internal",
     };
     const { getCurrentUserEntitlement, isProEntitlement } = await import(
       "../../src/lib/entitlements"
@@ -86,26 +84,49 @@ describe("entitlements", () => {
     expect(isProEntitlement(entitlement)).toBe(true);
   });
 
+  it("treats dodo active entitlement as pro", async () => {
+    supabaseState.user = { id: "user-1" };
+    supabaseState.row = {
+      plan: "pro",
+      status: "active",
+      source: "dodo",
+    };
+    const { getCurrentUserEntitlement, isProEntitlement } = await import(
+      "../../src/lib/entitlements"
+    );
+
+    const entitlement = await getCurrentUserEntitlement();
+
+    expect(isProEntitlement(entitlement)).toBe(true);
+  });
+
+  it("treats manual active entitlement as pro", async () => {
+    supabaseState.row = {
+      plan: "pro",
+      status: "active",
+      source: "manual",
+    };
+    const { isProEntitlement } = await import("../../src/lib/entitlements");
+
+    expect(isProEntitlement(supabaseState.row)).toBe(true);
+  });
+
   it("treats inactive pro entitlement as free", async () => {
     supabaseState.row = {
       plan: "pro",
-      is_pro: false,
-      valid_until: null,
-      status: "cancelled",
-      source: "dodo_subscription",
+      status: "inactive",
+      source: "internal",
     };
     const { isProEntitlement } = await import("../../src/lib/entitlements");
 
     expect(isProEntitlement(supabaseState.row)).toBe(false);
   });
 
-  it("treats expired pro entitlement as free", async () => {
+  it("treats cancelled pro entitlement as free", async () => {
     supabaseState.row = {
       plan: "pro",
-      is_pro: true,
-      valid_until: "2020-01-01T00:00:00Z",
-      status: "active",
-      source: "dodo_subscription",
+      status: "cancelled",
+      source: "dodo",
     };
     const { isProEntitlement } = await import("../../src/lib/entitlements");
 

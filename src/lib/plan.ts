@@ -54,7 +54,7 @@ export async function resolvePlanForUserId(
   return {
     isProUser,
     planName: isProUser ? "pro" : "free",
-    planSource: isProUser ? "dodo_subscription" : "default_free",
+    planSource: isProUser ? (entitlement?.source ?? "manual") : "default_free",
     updatedAt: new Date().toISOString(),
   };
 }

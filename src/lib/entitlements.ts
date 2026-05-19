@@ -3,16 +3,18 @@ import type { Entitlement } from "../types/billing";
 
 export type UserEntitlement = Entitlement;
 
-export type PlanSource = "dev_override" | "dodo_subscription" | "default_free";
+export type PlanSource =
+  | "dev_override"
+  | "default_free"
+  | "dodo"
+  | "internal"
+  | "manual"
+  | string;
 
 export function isProEntitlement(
   entitlement: UserEntitlement | null | undefined,
 ) {
-  if (entitlement?.plan !== "pro" || entitlement?.is_pro !== true) return false;
-  if (!entitlement.valid_until) return true;
-
-  const expiresAt = Date.parse(entitlement.valid_until);
-  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+  return entitlement?.plan === "pro" && entitlement?.status === "active";
 }
 
 export async function getEntitlementForUserId(
@@ -21,7 +23,7 @@ export async function getEntitlementForUserId(
   try {
     const { data, error } = await supabase
       .from("user_entitlements")
-      .select("plan,is_pro,source,dodo_subscription_id,valid_until,status")
+      .select("user_id,plan,status,source,reason,updated_at")
       .eq("user_id", userId)
       .maybeSingle();
 

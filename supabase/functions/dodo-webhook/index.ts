@@ -193,6 +193,11 @@ function isActiveUpdatedStatus(status: string) {
   return ["active", "renewed", "trialing"].includes(status.toLowerCase());
 }
 
+function getEntitlementStatus(isPro: boolean, eventStatus: string) {
+  if (isPro) return "active";
+  return eventStatus === "cancelled" ? "cancelled" : "inactive";
+}
+
 function getSignatureHeader(req: Request) {
   return (
     req.headers.get("webhook-signature") ??
@@ -482,25 +487,18 @@ async function setEntitlement({
   supabaseAdmin,
   userId,
   isPro,
-  subscriptionId,
-  validUntil,
   status,
 }: {
   supabaseAdmin: ReturnType<typeof createClient>;
   userId: string;
   isPro: boolean;
-  subscriptionId: string | null;
-  validUntil: string | null;
   status: string;
 }) {
   const { error } = await supabaseAdmin.from("user_entitlements").upsert(
     {
       user_id: userId,
       plan: isPro ? "pro" : "free",
-      is_pro: isPro,
-      source: "dodo_subscription",
-      dodo_subscription_id: subscriptionId,
-      valid_until: isPro ? validUntil : null,
+      source: "dodo",
       status,
       updated_at: new Date().toISOString(),
     },
@@ -508,6 +506,38 @@ async function setEntitlement({
   );
 
   if (error) throw error;
+}
+
+async function canDowngradeEntitlementForDodoWebhook({
+  supabaseAdmin,
+  userId,
+  subscriptionId,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  userId: string;
+  subscriptionId: string;
+}) {
+  const { data: entitlement, error: entitlementError } = await supabaseAdmin
+    .from("user_entitlements")
+    .select("source")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (entitlementError) throw entitlementError;
+
+  const source = getString((entitlement as JsonObject | null)?.source);
+  if (source === "internal" || source === "manual") return false;
+  if (source === "dodo") return true;
+
+  const { data: subscription, error: subscriptionError } = await supabaseAdmin
+    .from("subscriptions")
+    .select("dodo_subscription_id")
+    .eq("user_id", userId)
+    .eq("dodo_subscription_id", subscriptionId)
+    .maybeSingle();
+
+  if (subscriptionError) throw subscriptionError;
+  return Boolean(subscription);
 }
 
 async function processEvent({
@@ -580,6 +610,7 @@ async function processEvent({
     activeSubscriptionEvents.has(eventType) ||
     (eventType === "subscription.updated" && isActiveUpdatedStatus(status));
   const isInactive = inactiveSubscriptionEvents.has(eventType);
+  const shouldGrantPro = isActive && !isInactive;
 
   if (!subscription?.subscriptionId) {
     console.warn("[Arcalist] Dodo subscription webhook missing subscription id", {
@@ -589,13 +620,29 @@ async function processEvent({
     return "ignored";
   }
 
+  if (!shouldGrantPro) {
+    const canDowngrade = await canDowngradeEntitlementForDodoWebhook({
+      supabaseAdmin,
+      userId,
+      subscriptionId: subscription.subscriptionId,
+    });
+
+    if (!canDowngrade) {
+      console.info("[Arcalist] Dodo downgrade skipped for non-Dodo entitlement", {
+        event_id: eventId ?? undefined,
+        event_type: eventType,
+        user_id: userId,
+        dodo_subscription_id: subscription.subscriptionId,
+      });
+      return "skipped_non_dodo_entitlement";
+    }
+  }
+
   await setEntitlement({
     supabaseAdmin,
     userId,
-    isPro: isActive && !isInactive,
-    subscriptionId: subscription.subscriptionId,
-    validUntil: subscription.currentPeriodEnd,
-    status: isActive && !isInactive ? "active" : status,
+    isPro: shouldGrantPro,
+    status: getEntitlementStatus(shouldGrantPro, status),
   });
 
   return "processed";
