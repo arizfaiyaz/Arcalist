@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4?target=deno";
 
 type PlanCode = "pro_monthly" | "pro_yearly";
 
@@ -39,7 +39,7 @@ function getDodoBaseUrl() {
     : "https://test.dodopayments.com";
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
