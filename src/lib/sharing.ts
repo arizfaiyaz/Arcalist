@@ -1,6 +1,11 @@
 import { supabase } from "./supabase";
 import { resolveAuthenticatedPlanStatus } from "./plan";
 import { normalizeSafeUrl } from "./urlSafety";
+import {
+  getFriendlySupabaseErrorMessage,
+  isSupabasePermissionError,
+  PAGE_SHARING_PRO_MESSAGE,
+} from "./supabaseErrors";
 import type { Page } from "../types";
 import type {
   PublicSharedPage,
@@ -31,11 +36,11 @@ type ShareMutationParams = {
 async function requirePageSharingPro(userId: string, isProUser: boolean) {
   if (!userId) throw new Error("Sign in to Arcalist to share pages.");
   if (!isProUser) {
-    throw new Error("Page sharing is available with Arcalist Pro.");
+    throw new Error(PAGE_SHARING_PRO_MESSAGE);
   }
   const resolvedPlan = await resolveAuthenticatedPlanStatus(userId);
   if (!resolvedPlan.isProUser) {
-    throw new Error("Page sharing is available with Arcalist Pro.");
+    throw new Error(PAGE_SHARING_PRO_MESSAGE);
   }
 }
 
@@ -135,8 +140,6 @@ export async function createPageShare({
   const snapshot = buildSharedPageSnapshot(page);
   const now = new Date().toISOString();
 
-  // TODO: Frontend gating is not enough. This must also be protected by RLS,
-  // RPC, or Edge Function entitlement checks before production.
   const { data, error } = await supabase
     .from("shared_pages")
     .insert({
@@ -151,7 +154,11 @@ export async function createPageShare({
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      getFriendlySupabaseErrorMessage(error, PAGE_SHARING_PRO_MESSAGE),
+    );
+  }
 
   const share = data as SharedPageRecord;
   return {
@@ -173,8 +180,6 @@ export async function updatePageShareSnapshot({
 }): Promise<SharedPageRecord> {
   await requirePageSharingPro(userId, isProUser);
 
-  // TODO: Frontend gating is not enough. This must also be protected by RLS,
-  // RPC, or Edge Function entitlement checks before production.
   const { data, error } = await supabase
     .from("shared_pages")
     .update({
@@ -188,26 +193,29 @@ export async function updatePageShareSnapshot({
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      getFriendlySupabaseErrorMessage(error, PAGE_SHARING_PRO_MESSAGE),
+    );
+  }
   return data as SharedPageRecord;
 }
 
 export async function revokePageShare({
-  userId,
   shareId,
 }: ShareMutationParams): Promise<void> {
-  // TODO: Frontend gating is not enough. This must also be protected by RLS,
-  // RPC, or Edge Function entitlement checks before production.
-  const { error } = await supabase
-    .from("shared_pages")
-    .update({
-      is_active: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", shareId)
-    .eq("owner_id", userId);
+  const { data, error } = await supabase.rpc("revoke_shared_page", {
+    p_share_id: shareId,
+  });
 
-  if (error) throw error;
+  if (error) {
+    throw new Error(
+      getFriendlySupabaseErrorMessage(error, "Share link could not be revoked."),
+    );
+  }
+  if (data === false) {
+    throw new Error("Share link could not be revoked.");
+  }
 }
 
 export async function regeneratePageShare({
@@ -228,10 +236,13 @@ export async function fetchPublicSharedPage(
   shareToken: string,
 ): Promise<PublicSharedPage | null> {
   const { data, error } = await supabase.rpc("get_shared_page_by_token", {
-    p_share_token: shareToken,
+    p_token: shareToken,
   });
 
-  if (error) throw error;
+  if (error) {
+    if (isSupabasePermissionError(error)) return null;
+    throw error;
+  }
   const rows = data as PublicSharedPage[] | PublicSharedPage | null;
   if (Array.isArray(rows)) return rows[0] ?? null;
   return rows ?? null;

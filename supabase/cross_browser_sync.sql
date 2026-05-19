@@ -7,11 +7,6 @@ create table if not exists public.arcalist_workspaces (
   updated_by_device_id text
 );
 
--- Security TODO before payment launch:
--- Cross-browser sync is a Pro feature. Enforce Pro server-side for workspace
--- insert/update using trusted entitlement data such as auth.jwt() app_metadata
--- or an Edge Function after the billing provider is integrated.
-
 alter table public.arcalist_workspaces
   add column if not exists version integer not null default 1,
   add column if not exists updated_by_device_id text;
@@ -25,17 +20,19 @@ to authenticated
 using (auth.uid() = user_id);
 
 drop policy if exists "Users can insert their own workspace" on public.arcalist_workspaces;
-create policy "Users can insert their own workspace"
+drop policy if exists "Active Pro users can insert their own workspace" on public.arcalist_workspaces;
+create policy "Active Pro users can insert their own workspace"
 on public.arcalist_workspaces for insert
 to authenticated
-with check (auth.uid() = user_id);
+with check (auth.uid() = user_id and public.is_active_pro(auth.uid()));
 
 drop policy if exists "Users can update their own workspace" on public.arcalist_workspaces;
-create policy "Users can update their own workspace"
+drop policy if exists "Active Pro users can update their own workspace" on public.arcalist_workspaces;
+create policy "Active Pro users can update their own workspace"
 on public.arcalist_workspaces for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() = user_id and public.is_active_pro(auth.uid()))
+with check (auth.uid() = user_id and public.is_active_pro(auth.uid()));
 
 drop policy if exists "Users can delete their own workspace" on public.arcalist_workspaces;
 create policy "Users can delete their own workspace"
@@ -63,17 +60,19 @@ to authenticated
 using (auth.uid() = user_id);
 
 drop policy if exists "Users can insert their own sync devices" on public.sync_devices;
-create policy "Users can insert their own sync devices"
+drop policy if exists "Active Pro users can insert their own sync devices" on public.sync_devices;
+create policy "Active Pro users can insert their own sync devices"
 on public.sync_devices for insert
 to authenticated
-with check (auth.uid() = user_id);
+with check (auth.uid() = user_id and public.is_active_pro(auth.uid()));
 
 drop policy if exists "Users can update their own sync devices" on public.sync_devices;
-create policy "Users can update their own sync devices"
+drop policy if exists "Active Pro users can update their own sync devices" on public.sync_devices;
+create policy "Active Pro users can update their own sync devices"
 on public.sync_devices for update
 to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
+using (auth.uid() = user_id and public.is_active_pro(auth.uid()))
+with check (auth.uid() = user_id and public.is_active_pro(auth.uid()));
 
 drop policy if exists "Users can delete their own sync devices" on public.sync_devices;
 create policy "Users can delete their own sync devices"

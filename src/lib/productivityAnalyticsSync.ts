@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { resolveAuthenticatedPlanStatus } from "./plan";
+import { getFriendlySupabaseErrorMessage } from "./supabaseErrors";
 import type {
   DomainTimeStat,
   ProductivityAnalyticsState,
@@ -33,14 +34,18 @@ export async function syncProductivityAnalyticsToCloud(
 
   if (rows.length === 0) return;
 
-  // TODO: Frontend gating is not enough. This must also be protected by RLS,
-  // RPC, or Edge Function entitlement checks before production.
   const { error } = await supabase.from("productivity_analytics").upsert(rows, {
     onConflict: "user_id,date,domain",
   });
 
   if (error) {
-    console.warn("[Arcalist] Productivity analytics sync skipped:", error.message);
+    console.warn(
+      "[Arcalist] Productivity analytics sync skipped:",
+      getFriendlySupabaseErrorMessage(
+        error,
+        "Productivity analytics sync is available with Arcalist Pro.",
+      ),
+    );
   }
 }
 

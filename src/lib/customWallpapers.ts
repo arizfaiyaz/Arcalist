@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { resolveAuthenticatedPlanStatus } from "./plan";
+import { getFriendlySupabaseErrorMessage } from "./supabaseErrors";
 import type { ArcalistTheme, ThemeMode } from "../config/themes";
 import type { CustomWallpaper } from "../types";
 
@@ -157,7 +158,10 @@ export async function uploadCustomWallpaper({
       console.error("[Arcalist] Custom wallpaper upload failed:", error.message);
       return {
         ok: false,
-        error: "Something went wrong while uploading. Please try again.",
+        error: getFriendlySupabaseErrorMessage(
+          error,
+          "Custom wallpapers are available with Arcalist Pro.",
+        ),
       };
     }
 

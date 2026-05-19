@@ -206,6 +206,28 @@ function getSignatureHeader(req: Request) {
   );
 }
 
+function getAllowedProductIds() {
+  return new Set(
+    [
+      Deno.env.get("DODO_PRO_MONTHLY_PRODUCT_ID"),
+      Deno.env.get("DODO_PRO_YEARLY_PRODUCT_ID"),
+    ].filter((value): value is string => Boolean(value)),
+  );
+}
+
+function isAllowedArcalistProProduct(productId: string | null) {
+  return Boolean(productId && getAllowedProductIds().has(productId));
+}
+
+function validateWebhookTimestamp(webhookTimestamp: string | null) {
+  const timestamp = Number(webhookTimestamp);
+  if (!Number.isFinite(timestamp)) return "invalid" as const;
+
+  const timestampMs = timestamp < 10_000_000_000 ? timestamp * 1000 : timestamp;
+  const ageMs = Math.abs(Date.now() - timestampMs);
+  return ageMs <= 5 * 60 * 1000 ? "valid" as const : "stale" as const;
+}
+
 function extractSignatureCandidates(header: string) {
   return header
     .split(/[\s,;]+/)
@@ -316,59 +338,47 @@ function createAdminClient() {
   );
 }
 
-async function hasProcessedEvent({
-  supabaseAdmin,
-  eventId,
-}: {
-  supabaseAdmin: ReturnType<typeof createClient>;
-  eventId: string | null;
-}) {
-  if (!eventId) return false;
-
-  const { data, error } = await supabaseAdmin
-    .from("webhook_events")
-    .select("event_id")
-    .eq("event_id", eventId)
-    .maybeSingle();
-
-  if (error?.code === "42P01" || error?.code === "42703") return false;
-  if (error) throw error;
-  return Boolean(data);
-}
-
-async function recordWebhookEvent({
+async function reserveWebhookEvent({
   supabaseAdmin,
   eventId,
   eventType,
   event,
-  status,
 }: {
   supabaseAdmin: ReturnType<typeof createClient>;
-  eventId: string | null;
+  eventId: string;
   eventType: string;
   event: DodoEvent;
-  status: string;
 }) {
-  if (!eventId) return;
-
   const { error } = await supabaseAdmin.from("webhook_events").insert({
     event_id: eventId,
     provider: "dodo",
     event_type: eventType,
     payload: event,
-    status,
-    processed_at: new Date().toISOString(),
+    status: "processing",
   });
 
-  if (error?.code === "23505") return;
-  if (error?.code === "42P01" || error?.code === "42703") {
-    console.warn("[Arcalist] webhook_events table unavailable, skipping record", {
-      event_id: eventId,
-      event_type: eventType,
-      code: error.code,
-    });
-    return;
-  }
+  if (error?.code === "23505") return "duplicate" as const;
+  if (error) throw error;
+  return "reserved" as const;
+}
+
+async function markWebhookEventStatus({
+  supabaseAdmin,
+  eventId,
+  status,
+}: {
+  supabaseAdmin: ReturnType<typeof createClient>;
+  eventId: string;
+  status: string;
+}) {
+  const { error } = await supabaseAdmin
+    .from("webhook_events")
+    .update({
+      status,
+      processed_at: new Date().toISOString(),
+    })
+    .eq("event_id", eventId);
+
   if (error) throw error;
 }
 
@@ -382,9 +392,9 @@ async function findUserId({
   metadata: JsonObject;
   customerId: string | null;
   email: string | null;
-}) {
+}): Promise<{ userId: string; source: "metadata" | "customer" | "email" } | null> {
   const metadataUserId = getString(metadata.user_id);
-  if (metadataUserId) return metadataUserId;
+  if (metadataUserId) return { userId: metadataUserId, source: "metadata" };
 
   if (customerId) {
     const { data } = await supabaseAdmin
@@ -393,7 +403,7 @@ async function findUserId({
       .eq("dodo_customer_id", customerId)
       .maybeSingle();
     const userId = getString((data as JsonObject | null)?.user_id);
-    if (userId) return userId;
+    if (userId) return { userId, source: "customer" };
   }
 
   if (email) {
@@ -403,7 +413,7 @@ async function findUserId({
       .eq("email", email)
       .maybeSingle();
     const userId = getString((data as JsonObject | null)?.user_id);
-    if (userId) return userId;
+    if (userId) return { userId, source: "email" };
   }
 
   return null;
@@ -565,12 +575,22 @@ async function processEvent({
     return "ignored";
   }
 
-  const userId = await findUserId({
+  const productId = extractProductId(data);
+  if (!isAllowedArcalistProProduct(productId)) {
+    console.warn("Ignoring webhook for non-Arcalist-Pro product", {
+      eventType,
+      productId,
+    });
+    return "ignored_unknown_product";
+  }
+
+  const userLookup = await findUserId({
     supabaseAdmin,
     metadata,
     customerId,
     email,
   });
+  const userId = userLookup?.userId ?? null;
 
   if (!userId) {
     console.warn("[Arcalist] Dodo webhook could not be matched to a user", {
@@ -579,6 +599,14 @@ async function processEvent({
       has_email: Boolean(email),
     });
     return "unmatched";
+  }
+
+  if (userLookup?.source === "email") {
+    console.info("[Arcalist] Dodo webhook matched user by billing email fallback", {
+      event_id: eventId ?? undefined,
+      event_type: eventType,
+      user_id: userId,
+    });
   }
 
   await upsertBillingCustomer({
@@ -675,6 +703,14 @@ Deno.serve(async (req: Request) => {
     has_signature: Boolean(signatureHeader),
   });
 
+  const timestampStatus = validateWebhookTimestamp(timestamp);
+  if (timestampStatus === "invalid") {
+    return json({ error: "Invalid webhook timestamp" }, 401);
+  }
+  if (timestampStatus === "stale") {
+    return json({ error: "Webhook timestamp too old" }, 401);
+  }
+
   let verified = false;
   try {
     verified = await verifyWebhookSignature({
@@ -711,6 +747,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const eventId = getEventId(event, webhookId);
+  if (!eventId) {
+    return json({ error: "Missing webhook event id" }, 400);
+  }
+
   const data = getPayloadData(event);
   const supabaseAdmin = createAdminClient();
 
@@ -720,8 +760,14 @@ Deno.serve(async (req: Request) => {
   });
 
   try {
-    if (await hasProcessedEvent({ supabaseAdmin, eventId })) {
-      return json({ received: true, duplicate: true });
+    const reservation = await reserveWebhookEvent({
+      supabaseAdmin,
+      eventId,
+      eventType,
+      event,
+    });
+    if (reservation === "duplicate") {
+      return json({ ok: true, duplicate: true });
     }
 
     const status = await processEvent({
@@ -732,16 +778,27 @@ Deno.serve(async (req: Request) => {
       data,
     });
 
-    await recordWebhookEvent({
+    await markWebhookEventStatus({
       supabaseAdmin,
       eventId,
-      eventType,
-      event,
       status,
     });
 
+    if (status === "ignored_unknown_product") {
+      return json({
+        ok: true,
+        ignored: true,
+        reason: "unknown_product",
+      });
+    }
+
     return json({ received: true, status });
   } catch (error) {
+    await markWebhookEventStatus({
+      supabaseAdmin,
+      eventId,
+      status: "failed",
+    }).catch(() => {});
     console.error("[Arcalist] Dodo webhook processing failed", {
       event_id: eventId ?? undefined,
       event_type: eventType,

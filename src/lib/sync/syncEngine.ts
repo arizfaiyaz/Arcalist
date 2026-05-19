@@ -2,6 +2,7 @@ import { supabase } from "../supabase";
 import { resolveAuthenticatedPlanStatus } from "../plan";
 import { canonicalizeToHomeWorkspace } from "../chromeBookmarks";
 import { getDeviceInfo, updateDeviceLastSeen } from "../device";
+import { getFriendlySupabaseErrorMessage } from "../supabaseErrors";
 import type { ArcalistState } from "../../types";
 import type { ArcalistDevice, CloudWorkspaceRow } from "../../types/sync";
 import {
@@ -19,6 +20,7 @@ import {
 
 const WORKSPACE_TABLE = "arcalist_workspaces";
 const DEVICE_TABLE = "sync_devices";
+const CLOUD_SYNC_PRO_MESSAGE = "Cross-browser sync is available with Arcalist Pro.";
 
 type CloudWorkspace = {
   workspace: ArcalistState;
@@ -156,8 +158,10 @@ export async function pushToCloud(
   );
 
   if (error) {
-    // TODO: Frontend gating is not enough. This must also be protected by RLS,
-    // RPC, or Edge Function entitlement checks before production.
+    const friendlyMessage = getFriendlySupabaseErrorMessage(
+      error,
+      CLOUD_SYNC_PRO_MESSAGE,
+    );
     const fallback = await supabase.from(WORKSPACE_TABLE).upsert(
       {
         user_id: userId,
@@ -168,7 +172,22 @@ export async function pushToCloud(
         onConflict: "user_id",
       },
     );
-    if (fallback.error) throw fallback.error;
+    if (fallback.error) {
+      await updateSyncMeta({
+        status: "error",
+        error: getFriendlySupabaseErrorMessage(
+          fallback.error,
+          CLOUD_SYNC_PRO_MESSAGE,
+        ),
+      });
+      throw new Error(
+        getFriendlySupabaseErrorMessage(fallback.error, CLOUD_SYNC_PRO_MESSAGE),
+      );
+    }
+    if (friendlyMessage === CLOUD_SYNC_PRO_MESSAGE) {
+      await updateSyncMeta({ status: "error", error: friendlyMessage });
+      throw new Error(friendlyMessage);
+    }
   }
 
   await updateSyncMeta({
