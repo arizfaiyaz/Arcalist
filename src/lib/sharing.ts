@@ -9,6 +9,7 @@ import type {
 } from "../types/sharing";
 
 const DEFAULT_SHARE_BASE_URL = "https://arcalist.app";
+// TODO: Public share viewer must be deployed on arcalist.app for share links to work for anyone.
 
 type ShareParams = {
   userId: string;
@@ -41,6 +42,7 @@ async function requirePageSharingPro(userId: string, isProUser: boolean) {
 export function getShareBaseUrl(baseUrl?: string): string {
   return (
     baseUrl ||
+    import.meta.env.VITE_PUBLIC_APP_URL ||
     import.meta.env.VITE_PUBLIC_SHARE_BASE_URL ||
     DEFAULT_SHARE_BASE_URL
   ).replace(/\/+$/, "");
@@ -62,29 +64,44 @@ export function generateShareToken(): string {
 }
 
 export function buildSharedPageSnapshot(page: Page): SharedPageSnapshot {
+  const boards = [...(page.boards ?? [])]
+    .sort((a, b) => a.order - b.order)
+    .map((board) => {
+      const bookmarks = [...(board.bookmarks ?? [])]
+        .filter((bookmark) => !bookmark.isTrashed)
+        .map((bookmark, index) => {
+          const safeUrl = normalizeSafeUrl(bookmark.url);
+          if (!safeUrl) return null;
+          const safeFaviconUrl = normalizeSafeUrl(
+            bookmark.faviconUrl ?? bookmark.favicon ?? "",
+          );
+
+          return {
+            id: bookmark.id,
+            title: bookmark.title,
+            url: safeUrl,
+            faviconUrl: safeFaviconUrl ?? undefined,
+            order: index,
+          };
+        })
+        .filter((bookmark) => bookmark !== null);
+
+      return {
+        id: board.id,
+        title: board.title,
+        order: board.order,
+        bookmarks,
+      };
+    })
+    .filter((board) => board.bookmarks.length > 0);
+
   return {
     version: 1,
     page: {
       id: page.id,
       title: page.title,
     },
-    boards: [...(page.boards ?? [])]
-      .sort((a, b) => a.order - b.order)
-      .map((board) => ({
-        id: board.id,
-        title: board.title,
-        order: board.order,
-        bookmarks: [...(board.bookmarks ?? [])]
-          .filter((bookmark) => !bookmark.isTrashed && normalizeSafeUrl(bookmark.url))
-          .map((bookmark, index) => ({
-            id: bookmark.id,
-            title: bookmark.title,
-            url: normalizeSafeUrl(bookmark.url) ?? "",
-            favicon: normalizeSafeUrl(bookmark.favicon ?? "") ?? undefined,
-            faviconUrl: normalizeSafeUrl(bookmark.faviconUrl ?? "") ?? undefined,
-            order: index,
-          })),
-      })),
+    boards,
   };
 }
 

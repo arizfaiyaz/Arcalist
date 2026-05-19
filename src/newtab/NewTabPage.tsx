@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
+import { Sparkles, X } from "lucide-react";
 import { useArcalistStore } from "../store/useArcalistStore";
 import { PageNav } from "../components/PageNav";
 import { BoardGrid } from "../components/BoardGrid";
@@ -18,6 +19,7 @@ import { usePlanLimits } from "../hooks/usePlanLimits";
 import { setAnalyticsPlanStatus } from "../hooks/useProductivityAnalytics";
 import { useTheme } from "../hooks/useTheme";
 import { useEntitlementContext } from "../hooks/useEntitlement";
+import { browserApi } from "../lib/browserApi";
 import {
   canShareWorkspace,
   canUseProductivityAnalytics,
@@ -26,6 +28,10 @@ import {
   type PlanVisibleBoard,
 } from "../lib/planLimits";
 import type { Board, Page } from "../types";
+
+const FIRST_SEEN_STORAGE_KEY = "arcalist:firstSeenAt";
+const PRO_BANNER_DISMISSED_STORAGE_KEY = "arcalist:proBannerDismissedAt";
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 export function NewTabPage() {
   const pages = useArcalistStore((state) => state.pages);
@@ -61,6 +67,7 @@ export function NewTabPage() {
     null,
   );
   const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [showUpgradeBanner, setShowUpgradeBanner] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string;
     description: string;
@@ -157,6 +164,50 @@ export function NewTabPage() {
   }, [planLimits.isProUser, planLimits.planName]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const resolveBannerState = async () => {
+      if (!user?.id || planLoading) {
+        setShowUpgradeBanner(false);
+        return;
+      }
+
+      const now = Date.now();
+      const stored = await browserApi.storage.get<
+        Record<string, string | number | undefined>
+      >([FIRST_SEEN_STORAGE_KEY, PRO_BANNER_DISMISSED_STORAGE_KEY]);
+
+      const dismissedAt = stored[PRO_BANNER_DISMISSED_STORAGE_KEY];
+      if (dismissedAt) {
+        if (!cancelled) setShowUpgradeBanner(false);
+        return;
+      }
+
+      const firstSeenValue = stored[FIRST_SEEN_STORAGE_KEY];
+      const firstSeenAt =
+        typeof firstSeenValue === "number"
+          ? firstSeenValue
+          : Number(firstSeenValue);
+
+      if (!Number.isFinite(firstSeenAt) || firstSeenAt <= 0) {
+        await browserApi.storage.set({ [FIRST_SEEN_STORAGE_KEY]: now });
+        if (!cancelled) setShowUpgradeBanner(false);
+        return;
+      }
+
+      const shouldShow =
+        !planLimits.isProUser && now - firstSeenAt >= ONE_DAY_MS;
+      if (!cancelled) setShowUpgradeBanner(shouldShow);
+    };
+
+    void resolveBannerState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [planLimits.isProUser, planLoading, user?.id]);
+
+  useEffect(() => {
     if (!wallpaperOpen) return;
 
     const handlePointerDown = (event: PointerEvent) => {
@@ -191,6 +242,22 @@ export function NewTabPage() {
       description:
         "Free plan supports up to 10 boards per page. Upgrade to Pro for unlimited boards.",
       featureName: "Boards",
+    });
+  };
+
+  const showGeneralUpgradePrompt = () => {
+    setUpgradePrompt({
+      title: "Upgrade to Arcalist Pro",
+      description:
+        "Unlock unlimited boards, premium themes, smart collections, analytics, sharing, and sync.",
+      featureName: "Arcalist Pro",
+    });
+  };
+
+  const dismissUpgradeBanner = () => {
+    setShowUpgradeBanner(false);
+    void browserApi.storage.set({
+      [PRO_BANNER_DISMISSED_STORAGE_KEY]: new Date().toISOString(),
     });
   };
 
@@ -306,6 +373,13 @@ export function NewTabPage() {
 
       <main className="newtab-center">
         <div className="newtab-workspace">
+          {showUpgradeBanner && (
+            <FreeUpgradeBanner
+              onUpgrade={showGeneralUpgradePrompt}
+              onDismiss={dismissUpgradeBanner}
+            />
+          )}
+
           <PageNav
             pages={visiblePages}
             activePageId={activePage?.id ?? activePageId}
@@ -382,6 +456,7 @@ export function NewTabPage() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        onUpgradeRequest={showGeneralUpgradePrompt}
       />
       {upgradePrompt && (
         <UpgradePromptModal
@@ -391,6 +466,48 @@ export function NewTabPage() {
           onClose={() => setUpgradePrompt(null)}
         />
       )}
+    </div>
+  );
+}
+
+function FreeUpgradeBanner({
+  onUpgrade,
+  onDismiss,
+}: {
+  onUpgrade: () => void;
+  onDismiss: () => void;
+}) {
+  return (
+    <div className="mb-3 rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-modal-bg)] px-3 py-2 shadow-lg shadow-black/10 backdrop-blur-xl">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-start gap-2">
+          <Sparkles
+            size={16}
+            className="mt-0.5 shrink-0 text-[var(--arc-accent)]"
+          />
+          <p className="text-sm leading-5 text-[var(--arc-text-primary)]">
+            Get more from Arcalist — upgrade to Pro for unlimited boards,
+            premium themes, smart collections, analytics, sharing, and sync.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onUpgrade}
+            className="arc-btn arc-btn-primary min-h-8 px-3 text-xs"
+          >
+            Upgrade to Pro
+          </button>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Dismiss upgrade banner"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--arc-text-secondary)] hover:bg-[var(--arc-button-bg)] hover:text-[var(--arc-text-primary)]"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

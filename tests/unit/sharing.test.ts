@@ -23,6 +23,12 @@ describe("shared page snapshots", () => {
             favicon: "javascript:alert(1)",
           },
           {
+            id: "trashed",
+            title: "Trashed",
+            url: "https://example.org",
+            isTrashed: true,
+          },
+          {
             id: "unsafe",
             title: "Unsafe",
             url: "javascript:alert(1)",
@@ -41,8 +47,10 @@ describe("shared page snapshots", () => {
     expect(snapshot.boards[0].bookmarks[0]).toMatchObject({
       id: "safe",
       url: "https://example.com/",
-      favicon: undefined,
+      faviconUrl: undefined,
+      order: 0,
     });
+    expect(snapshot.boards[0].bookmarks[0]).not.toHaveProperty("favicon");
   });
 
   it("rejects direct share creation for free users", async () => {

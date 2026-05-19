@@ -25,6 +25,12 @@ on public.shared_pages for select
 to authenticated
 using (auth.uid() = owner_id);
 
+drop policy if exists "Anyone can read active shared pages" on public.shared_pages;
+create policy "Anyone can read active shared pages"
+on public.shared_pages for select
+to anon, authenticated
+using (is_active = true);
+
 drop policy if exists "Owners can insert their shared pages" on public.shared_pages;
 create policy "Owners can insert their shared pages"
 on public.shared_pages for insert

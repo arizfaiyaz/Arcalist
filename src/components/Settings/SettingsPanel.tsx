@@ -1,7 +1,16 @@
 import { useRef, useState } from "react";
-import { X, Settings, User, HelpCircle } from "lucide-react";
+import {
+  CheckCircle2,
+  Crown,
+  HelpCircle,
+  RefreshCw,
+  Settings,
+  User,
+  X,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useArcalistStore } from "../../store/useArcalistStore";
+import { usePlanLimits } from "../../hooks/usePlanLimits";
 import { SyncSettings } from "./SyncSettings";
 
 type Tab = "general" | "account" | "support";
@@ -9,9 +18,10 @@ type Tab = "general" | "account" | "support";
 type Props = {
   open: boolean;
   onClose: () => void;
+  onUpgradeRequest: () => void;
 };
 
-export function SettingsPanel({ open, onClose }: Props) {
+export function SettingsPanel({ open, onClose, onUpgradeRequest }: Props) {
   const [tab, setTab] = useState<Tab>("general");
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -80,7 +90,9 @@ export function SettingsPanel({ open, onClose }: Props) {
           </button>
 
           {tab === "general" && <GeneralSettings />}
-          {tab === "account" && <AccountSettings />}
+          {tab === "account" && (
+            <AccountSettings onUpgradeRequest={onUpgradeRequest} />
+          )}
           {tab === "support" && <SupportSettings />}
         </div>
       </div>
@@ -174,7 +186,11 @@ function GeneralSettings() {
 }
 
 // ─── Account Tab ──────────────────────────────────────────
-function AccountSettings() {
+function AccountSettings({
+  onUpgradeRequest,
+}: {
+  onUpgradeRequest: () => void;
+}) {
   const user = useArcalistStore((state) => state.user);
   const signInWithGoogle = useArcalistStore((state) => state.signInWithGoogle);
   const signOut = useArcalistStore((state) => state.signOut);
@@ -269,6 +285,8 @@ function AccountSettings() {
             </div>
           </div>
 
+          <ArcalistProSettings onUpgradeRequest={onUpgradeRequest} />
+
           <button
             onClick={handleSignOut}
             className="arc-btn arc-btn-secondary w-full"
@@ -303,6 +321,97 @@ function AccountSettings() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+function ArcalistProSettings({
+  onUpgradeRequest,
+}: {
+  onUpgradeRequest: () => void;
+}) {
+  const planLimits = usePlanLimits();
+  const [refreshing, setRefreshing] = useState(false);
+  const loading = Boolean(planLimits.loading);
+  const isProUser = planLimits.isProUser;
+
+  const handleRefresh = async () => {
+    if (!planLimits.refreshPlan) return;
+    setRefreshing(true);
+    try {
+      await planLimits.refreshPlan();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-bg)] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[var(--arc-glass-border)] bg-[var(--arc-button-active-bg)] text-[var(--arc-accent)]">
+            <Crown size={16} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-semibold text-[var(--arc-text-primary)]">
+                Arcalist Pro
+              </p>
+              {!loading && isProUser && (
+                <span className="inline-flex items-center gap-1 rounded-md border border-[var(--arc-accent)]/35 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--arc-accent)]">
+                  <CheckCircle2 size={11} />
+                  Active
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-[var(--arc-text-secondary)]">
+              {loading
+                ? "Checking your plan..."
+                : isProUser
+                  ? "Current plan: Pro"
+                  : "Current plan: Free"}
+            </p>
+            {!loading && !isProUser && (
+              <p className="mt-2 text-xs leading-5 text-[var(--arc-text-secondary)]">
+                Unlock unlimited boards, premium themes, smart collections,
+                analytics, sharing, and sync.
+              </p>
+            )}
+            {!loading && isProUser && (
+              <p className="mt-2 text-xs leading-5 text-[var(--arc-text-secondary)]">
+                Billing management will be available soon.
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
+        {loading ? (
+          <button type="button" disabled className="arc-btn arc-btn-secondary w-full">
+            <RefreshCw size={14} className="animate-spin" />
+            Checking plan...
+          </button>
+        ) : isProUser ? (
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="arc-btn arc-btn-secondary w-full"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+            Refresh Pro status
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={onUpgradeRequest}
+            className="arc-btn arc-btn-primary w-full"
+          >
+            Upgrade to Pro
+          </button>
+        )}
+      </div>
     </div>
   );
 }

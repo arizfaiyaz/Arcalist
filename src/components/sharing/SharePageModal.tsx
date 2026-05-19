@@ -60,6 +60,7 @@ export function SharePageModal({
       try {
         setShare(await getShareForPage({ userId, pageId: page.id }));
       } catch (err) {
+        console.warn("[Arcalist] Failed to load share status:", err);
         setError(getErrorMessage(err));
       } finally {
         setBusy(null);
@@ -87,6 +88,7 @@ export function SharePageModal({
     try {
       await action();
     } catch (err) {
+      console.warn("[Arcalist] Share page action failed:", err);
       setError(getErrorMessage(err));
     } finally {
       setBusy(null);
@@ -194,9 +196,12 @@ export function SharePageModal({
         </header>
 
         <div className="space-y-4 p-5">
-          <div className="rounded-lg border border-amber-300/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100/80">
+          <div className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm text-[var(--arc-text-primary)]">
             <div className="flex gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
+              <AlertTriangle
+                size={15}
+                className="mt-0.5 shrink-0 text-amber-500"
+              />
               <p>
                 Anyone with this link can view this page. Only this page is
                 shared; other pages, settings, analytics, and account details stay
@@ -373,5 +378,11 @@ async function copyText(text: string) {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return "Something went wrong. Please try again.";
 }

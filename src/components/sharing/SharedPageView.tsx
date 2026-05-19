@@ -25,7 +25,8 @@ export function SharedPageView({ token }: Props) {
         }
         setSharedPage(page);
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
+        console.warn("[Arcalist] Failed to load shared page:", err);
+        setError(getErrorMessage(err));
       } finally {
         setLoading(false);
       }
@@ -82,9 +83,9 @@ export function SharedPageView({ token }: Props) {
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-[var(--arc-text-primary)] hover:bg-[var(--arc-button-bg)]"
                     >
-                      {bookmark.favicon || bookmark.faviconUrl ? (
+                      {bookmark.faviconUrl ? (
                         <img
-                          src={bookmark.favicon ?? bookmark.faviconUrl}
+                          src={bookmark.faviconUrl}
                           alt=""
                           className="h-4 w-4 shrink-0 rounded-sm"
                         />
@@ -114,6 +115,16 @@ export function SharedPageView({ token }: Props) {
       </main>
     </div>
   );
+}
+
+function getErrorMessage(error: unknown) {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return "Something went wrong. Please try again.";
 }
 
 function StateCard({ text }: { text: string }) {

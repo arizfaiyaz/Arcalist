@@ -3,8 +3,6 @@ export type SharedPageSnapshot = {
   page: {
     id: string;
     title: string;
-    createdAt?: string;
-    updatedAt?: string;
   };
   boards: Array<{
     id: string;
@@ -14,9 +12,8 @@ export type SharedPageSnapshot = {
       id: string;
       title: string;
       url: string;
-      favicon?: string;
       faviconUrl?: string;
-      order?: number;
+      order: number;
     }>;
   }>;
 };
